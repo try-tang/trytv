@@ -1,23 +1,30 @@
 # trytv · 君砚影视
 
-<p align="center">
-  <b>聚合搜索 · 多源播放 · 榜单推荐 · 直播 IPTV · 私人短剧 · 电视版 · 站长后台</b><br>
-  <sub>基于 <a href="https://github.com/LibreSpark/LibreTV">LibreTV</a> 改造的在线影视聚合站，Next.js 15 App Router + TypeScript + Tailwind CSS</sub>
-</p>
+君砚影视（trytv）是一款开源的自托管影视聚合站：多采集站并行搜索、跨源同名聚合、ArtPlayer + hls.js 播放、豆瓣 / Bangumi 推荐、直播 IPTV，并补齐了求片、赞赏留言墙、站长通知、私人短剧、电视版与站长后台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
 
-> 本项目是把 LibreTV 按 [carefreestars.dynv6.net](https://carefreestars.dynv6.net/) 的形态改造后的版本：品牌换成「君砚影视」，
-> 并补齐了求片、赞赏留言板、站长通知、私密短剧、管理员后台、电视版、软件下载、榜单等业务。
-> 完整的改动清单、页面地图、接口文档、数据落点、与目标站的差异见 **[TRANSFORM.md](./TRANSFORM.md)**。
+> 🌐 **形态参考**：[carefreestars.dynv6.net](https://carefreestars.dynv6.net/)（本站按该站形态改造，品牌为「君砚影视」）
+>
+> 🧩 **上游底座**：[LibreTV](https://github.com/LibreSpark/LibreTV)（AGPL-3.0，本项目保留其采集 / 聚合 / 播放内核，只做换皮与业务补齐）
+>
+> 📖 **改造说明**：[TRANSFORM.md](./TRANSFORM.md) —— 改动清单、页面地图、接口文档、数据落点、与目标站的差异
+>
+> 🐳 **镜像**：`ghcr.io/try-tang/trytv:latest`（`linux/amd64` + `linux/arm64`）
+
+<p align="center">
+  <b>聚合搜索 · 多源播放 · 榜单推荐 · 直播 IPTV · 私人短剧 · 电视版 · 站长后台</b>
+</p>
 
 ---
 
 ## 目录
 
+- [项目简介](#项目简介)
 - [核心特性](#核心特性)
 - [快速开始](#快速开始)
 - [部署](#部署)
   - [Docker（推荐）](#docker推荐)
   - [Docker Compose](#docker-compose)
+  - [免 Docker 运行（预构建包）](#免-docker-运行预构建包)
   - [手动运行（Node）](#手动运行node)
   - [反向代理（Nginx / Caddy）](#反向代理nginx--caddy)
   - [环境变量](#环境变量)
@@ -34,6 +41,25 @@
 - [衍生作品](#衍生作品)
 - [许可与致谢](#许可与致谢)
 - [免责声明](#免责声明)
+
+## 项目简介
+
+**trytv（君砚影视）** 是 [LibreTV](https://github.com/LibreSpark/LibreTV) 的衍生改造版。上游本身已经是一个完整可用的影视聚合站（多源搜索、跨源聚合、HLS 播放、源健康度、订阅导入导出、直播 IPTV、PWA），本项目在此基础上做两件事：
+
+1. **换皮**：视觉、导航、首页结构对齐 [目标站](https://carefreestars.dynv6.net/)，站名/Logo/slogan/主题色/功能开关全部收口到 `src/lib/site.ts` 与 `src/app/globals.css` 两处。
+2. **补业务**：加上了原站有、而 LibreTV 没有的站点侧功能 —— 求片、赞赏与留言墙、站长通知、私人短剧、管理员后台、电视版、软件下载、榜单页。
+
+代码上不做重写：采集解析、跨源聚合、播放器与代理内核保持上游实现，新增部分全部落在独立文件里，升级上游时冲突面很小。
+
+| 维度 | LibreTV（上游） | trytv（本项目） |
+| --- | --- | --- |
+| 定位 | 通用影视聚合站 | 面向个人自建站点的一站式影视站 |
+| 首页 | 搜索框 + 豆瓣推荐 | Hero 轮播 + 三个横滑片单 + 服务区 |
+| 导航 | 桌面顶栏 | 单字方块 Logo + 顶栏 + 移动端底部 4 tab |
+| 站点业务 | 无 | 求片 / 赞赏留言墙 / 站长通知 / 私人短剧 / 后台 |
+| 多端 | 桌面 + 移动 | 额外提供 `/tv` 大屏电视版、`/download` 客户端页 |
+| 数据存储 | 仅浏览器本地 | 浏览器本地 + 服务端 `.data/site.json` |
+| 站点配置 | 分散在组件内 | `src/lib/site.ts` 单点收口 + 环境变量覆盖 |
 
 ## 核心特性
 
@@ -146,6 +172,22 @@ docker compose down             # 停止（./data 保留）
 ```
 
 其余可选变量见 [环境变量](#环境变量)。
+
+### 免 Docker 运行（预构建包）
+
+不想装 Docker 也可以用 release 里的独立产物，解压即跑：
+
+```bash
+# 1. 从 Releases 下载对应平台包（如 trytv-1.0.0-standalone-linux-x64.tar.gz）
+# 2. 解压并进入目录
+tar -xzf trytv-1.0.0-standalone-*.tar.gz && cd trytv
+
+# 3. 起服务（首次会在当前目录生成 .data 存业务数据）
+PASSWORD=your-password PORT=8080 node server.js
+```
+
+> 预构建包由 `.github/workflows/docker-publish.yml` 同源的 CI 产出，运行时只需要 Node.js 18+。
+> Windows 用户可直接下载 `*standalone-win-x64.zip`，解压后双击 `start.bat`（或 `set PASSWORD=xxx && node server.js`）。
 
 ### 手动运行（Node）
 
