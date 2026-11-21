@@ -9,7 +9,7 @@
 export interface SiteBrand {
   /** 站名：顶栏、标题、PWA */
   name: string;
-  /** 顶栏 Logo 一个字（原站是「君」） */
+  /** 顶栏 Logo 显示的字（默认取站名首字「看」） */
   mark: string;
   /** 副标题 / slogan（首页 hero 与 PWA description） */
   slogan: string;
@@ -47,12 +47,12 @@ export interface SiteNavItem {
 }
 
 export const SITE: SiteBrand = {
-  name: process.env.NEXT_PUBLIC_SITE_NAME || '君砚影视',
-  mark: process.env.NEXT_PUBLIC_SITE_MARK || '君',
+  name: process.env.NEXT_PUBLIC_SITE_NAME || '看看电视',
+  mark: process.env.NEXT_PUBLIC_SITE_MARK || '看',
   slogan: process.env.NEXT_PUBLIC_SITE_SLOGAN || '每日一部好片',
   searchPlaceholder:
     process.env.NEXT_PUBLIC_SITE_SEARCH_PLACEHOLDER || '搜索片名、演员、短剧',
-  titleTemplate: process.env.NEXT_PUBLIC_SITE_TITLE_TEMPLATE || '%s · 君砚影视',
+  titleTemplate: process.env.NEXT_PUBLIC_SITE_TITLE_TEMPLATE || '%s · 看看电视',
   themeColor: process.env.NEXT_PUBLIC_SITE_THEME_COLOR || '#00a6ff',
 };
 

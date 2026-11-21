@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { guardRequest } from '@/lib/api-guard';
+import { guardAdmin } from '@/lib/api-guard';
 import { checkLiveUrlAllowed, checkUpstreamAllowed, isValidProxyUrl } from '@/lib/ssrf';
 import { fetchUpstream } from '@/lib/fetch-utils';
 import { describeParseStats, parseSubscriptionJson, parseSubscriptionPayload, withSkipped } from '@/lib/tvbox-parser';
@@ -17,7 +17,7 @@ export const runtime = 'nodejs';
  * 因此两类分别校验，不能共用一把尺子；被校验拦下的条目同样计入统计，便于前端说明导入结果。
  */
 export async function GET(req: Request) {
-  const guarded = guardRequest(req);
+  const guarded = guardAdmin(req);
   if (guarded) return guarded;
 
   const requestUrl = new URL(req.url);

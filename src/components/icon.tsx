@@ -26,7 +26,7 @@ export type IconName =
   | 'gear'
   | 'home'
   | 'menu'
-  /* —— 原站（君砚影视）导航用的图标 —— */
+  /* —— 站点导航（榜单 / 我的 / 收藏等）用的图标 —— */
   | 'chart'
   | 'user'
   | 'star'

@@ -2,7 +2,7 @@
   "name": "trytv",
   "version": "1.0.0",
   "private": true,
-  "description": "君砚影视 · 基于 LibreTV 改造的在线影视聚合站（Next.js 15 App Router）",
+  "description": "看看电视 · 基于 LibreTV 改造的在线影视聚合站（Next.js 15 App Router）",
   "keywords": [
     "libretv",
     "nextjs",

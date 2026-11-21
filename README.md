@@ -1,8 +1,8 @@
-# trytv · 影视
+# trytv · 看看电视
 
-try影视（trytv）是一款开源的自托管影视聚合站：多采集站并行搜索、跨源同名聚合、ArtPlayer + hls.js 播放、豆瓣 / Bangumi 推荐、直播 IPTV，并补齐了求片、赞赏留言墙、站长通知、私人短剧、电视版与站长后台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
+trytv（看看电视）是一款开源的自托管影视聚合站：多采集站并行搜索、跨源同名聚合、ArtPlayer + hls.js 播放、豆瓣 / Bangumi 推荐、直播 IPTV，并补齐了求片、赞赏留言墙、站长通知、私人短剧、电视版与站长后台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
 
-> 🌐 **形态参考**：[carefreestars.dynv6.net](https://carefreestars.dynv6.net/)（本站按该站形态改造，品牌为「君砚影视」）
+> 🌐 **形态参考**：[carefreestars.dynv6.net](https://carefreestars.dynv6.net/)（本站按该站形态改造，品牌为「看看电视」）
 >
 > 🧩 **上游底座**：[LibreTV](https://github.com/LibreSpark/LibreTV)（AGPL-3.0，本项目保留其采集 / 聚合 / 播放内核，只做换皮与业务补齐）
 >
@@ -44,7 +44,7 @@ try影视（trytv）是一款开源的自托管影视聚合站：多采集站并
 
 ## 项目简介
 
-**trytv（君砚影视）** 是 [LibreTV](https://github.com/LibreSpark/LibreTV) 的衍生改造版。上游本身已经是一个完整可用的影视聚合站（多源搜索、跨源聚合、HLS 播放、源健康度、订阅导入导出、直播 IPTV、PWA），本项目在此基础上做两件事：
+**trytv（看看电视）** 是 [LibreTV](https://github.com/LibreSpark/LibreTV) 的衍生改造版。上游本身已经是一个完整可用的影视聚合站（多源搜索、跨源聚合、HLS 播放、源健康度、订阅导入导出、直播 IPTV、PWA），本项目在此基础上做两件事：
 
 1. **换皮**：视觉、导航、首页结构对齐 [目标站](https://carefreestars.dynv6.net/)，站名/Logo/slogan/主题色/功能开关全部收口到 `src/lib/site.ts` 与 `src/app/globals.css` 两处。
 2. **补业务**：加上了原站有、而 LibreTV 没有的站点侧功能 —— 求片、赞赏与留言墙、站长通知、私人短剧、管理员后台、电视版、软件下载、榜单页。
@@ -250,7 +250,7 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `PASSWORD` | ✅ | 访问密码；未设置时站点提示管理员配置，`/admin` 等接口返回 503 |
+| `PASSWORD` | ✅ | 站长密码；用于登录后台 `/admin`。站点对外的可见范围由后台「站点设置 → 访问模式」决定，不依赖它 |
 | `PROXY_SECRET` | | 会话 / 代理签名密钥；不设置时从 `PASSWORD` 派生（多实例部署建议显式设置：`openssl rand -hex 32`） |
 | `COOKIE_SECURE` | | 覆盖会话 cookie 的 `Secure` 标记（`true` / `false`）；默认按 `x-forwarded-proto` 推导 |
 | `PORT` | | 监听端口；`next start` 用 `-p` 指定，standalone / Docker 用该变量（镜像内默认 8080） |
@@ -277,13 +277,13 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 | `DEFAULT_RECOMMEND_SOURCE` | 首页推荐默认值（`douban` / `bangumi` / `hot-list`），仅对未主动选择过的用户生效 |
 | `LIVE_ALLOW_PRIVATE` | 设为 `1` 允许直播代理访问内网地址（自建 IPTV），默认关闭以维持 SSRF 防护 |
 
-**君砚影视业务**
+**站点业务（看看电视）**
 
 | 变量 | 说明 |
 | --- | --- |
 | `SHORTS_PASSWORD` | 私密短剧 `/shorts` 的进入口令；未设置时该页返回 503 |
 | `SHORTS_SECRET` | 短剧口令 cookie 的签名密钥；未设置时依次退回 `SHORTS_PASSWORD` / `PASSWORD` |
-| `SITE_DATA_DIR` | 业务数据（求片 / 赞赏 / 通知 / 短剧清单）落盘目录，默认 `<项目>/.data` |
+| `SITE_DATA_DIR` | 业务数据（求片 / 赞赏 / 通知 / 短剧清单 / 站点设置 / 用户表）落盘目录，默认 `<项目>/.data` |
 | `NEXT_PUBLIC_SERVER_COST` | 赞赏弹窗里「服务器成本每月 N 元」的数字，默认 75 |
 | `NEXT_PUBLIC_DOWNLOADS` | 下载页清单，格式 `平台\|名称\|说明\|链接`，多条用英文逗号分隔 |
 
@@ -311,7 +311,8 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 | `/tv` | 电视版大屏：方向键遥控导航 |
 | `/download` | 软件下载：多平台清单 + PWA 安装指引 |
 | `/shorts` | 私密短剧：口令进入，竖屏连看 |
-| `/admin` | 站长后台：求片 / 留言 / 通知 |
+| `/admin` | 站长后台：求片 / 留言 / 通知 / 站点设置 / 用户管理（仅站长密码可进） |
+| `/login` | 登录 / 注册 / 站长登录（`?next=` 登录后回跳） |
 | `/about` | 关于：用法、快捷键、隐私、免责 |
 
 站点级接口（本仓库新增）：
@@ -322,7 +323,9 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 | `/api/tip` | POST / GET | 提交赞赏留言；GET 只返回审核通过的 |
 | `/api/notice` | GET | 读取站长通知（含 `version`，前台据此只弹一次） |
 | `/api/shorts` | POST / GET | POST 校验口令下发 7 天签名 cookie；GET 返回短剧清单 |
-| `/api/admin` | GET / POST | 后台：`?res=stats\|requests\|tips\|all`；POST `action=request.status\|request.reply\|request.delete\|tip.status\|tip.delete\|notice.save` |
+| `/api/admin` | GET / POST | 后台：`?res=stats\|requests\|tips\|users\|settings\|all`；POST `action=request.status\|request.reply\|request.delete\|tip.status\|tip.delete\|notice.save\|settings.save\|user.create\|user.disable\|user.enable\|user.password\|user.delete` |
+| `/api/user` | GET / POST / DELETE | 注册用户：GET 当前身份与站点策略；POST `action=login\|register`；DELETE 退出 |
+| `/api/access` | GET | 访问策略与当前身份（middleware 读取，`no-store`） |
 
 ## 站长后台
 
@@ -331,6 +334,28 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 - **求片**：查看 / 标记（排队中 → 已收录 / 暂不提供）/ 回复 / 删除
 - **留言**：审核赞赏留言（展示 / 隐藏），排版留言墙
 - **通知**：写一条公告并开启，前台按 `version` 只弹一次（改动正文会自增版本号）
+- **站点设置**：访问模式（所有人可看 / 需登录 / 仅会员可看）、是否开放注册、站名、口号、顶部提示条
+- **用户管理**：手动建号、停用 / 启用、重置密码、删除
+
+### 访问模式与用户体系
+
+「站点设置 → 谁可以看」三档，改完即时生效（下次请求就走新策略）：
+
+| 模式 | 匿名访客 | 注册用户 | 站长（PASSWORD） |
+| --- | --- | --- | --- |
+| `open`（所有人可看，默认） | ✅ 可看 | ✅ 可看 | ✅ 可看 |
+| `login`（需登录） | ❌ 跳 `/login` | ✅ 可看 | ✅ 可看 |
+| `members`（仅会员） | ❌ 跳 `/login` | ✅ 可看 | ✅ 可看 |
+
+> 三个模式都**不会**把 `/admin` 开放给注册用户：后台只认 `PASSWORD` 登录的站长会话。
+> 「是否开放注册」独立于访问模式——关掉后新用户自助注册返回「本站当前未开放注册，请联系站长开通账号」，已有账号照常登录。
+
+实现要点：
+
+- 用户存 `.data/users.json`（`SITE_DATA_DIR` 可改），密码用 `scrypt` 加盐哈希，永远不落明文；
+- 会话是 httpOnly cookie `ltv_user`（30 天），HMAC-SHA256 签名，签名密钥与站长会话同源派生（`src/lib/users.ts` 的 `sessionKey()`，Edge 侧 `src/middleware.ts` 的 `userSecret()` 逐字节对齐）；
+- 门槛在 `src/middleware.ts` 统一拦（`/admin` 单独判站长 cookie），`src/lib/api-guard.ts` 的 `guardRequest()` 负责 API 侧，「读不到策略时按 open 放行」，不会因为内部请求失败把整站锁死；
+- 登录 / 注册限流：同 IP 10 次 / 10 分钟（`checkRateLimit('user:' + ip)`）。
 
 数据落在 `SITE_DATA_DIR`（默认 `.data/site.json`），单文件 JSON，直接备份这个文件即可。
 
@@ -398,6 +423,8 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 | 站名 / Logo 字 / slogan / 搜索框占位 / 标题模板 / 主题色 | `src/lib/site.ts` 的 `SITE`（或用 `NEXT_PUBLIC_SITE_*` 环境变量覆盖） |
 | 首页三个片单 | `src/lib/site.ts` 的 `HOME_ROWS` |
 | 配色（背景 / 卡片 / 强调色等 CSS 变量） | `src/app/globals.css` 的 `.dark` 段 |
+| 站名 / 口号的**运行时**覆盖 | 后台 `/admin` → 站点设置（优先级高于 `NEXT_PUBLIC_*`，改完不用重新构建） |
+| 访问模式 / 是否开放注册 | 后台 `/admin` → 站点设置 |
 | 功能开关（求片 / 赞赏 / 通知 / 短剧 / 后台 / 电视版 / 下载 / 榜单） | `src/lib/site.ts` 的 `FEATURES`，或用 `NEXT_PUBLIC_FEATURE_*=0` 关闭 |
 | 收款码 | 覆盖 `public/img/alipay.jpg`、`public/img/wechat.png` |
 | 下载页清单 | `NEXT_PUBLIC_DOWNLOADS` |

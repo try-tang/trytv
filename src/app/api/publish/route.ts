@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { guardRequest } from '@/lib/api-guard';
+import { guardAdmin } from '@/lib/api-guard';
 import { MAX_LIVE_SOURCES, MAX_VOD_SOURCES } from '@/lib/source-list';
 import { MAX_PUBLISH_BYTES, publishSourceList } from '@/lib/source-list-publish';
 
@@ -57,7 +57,7 @@ function normalizePayload(raw: unknown): { name?: string; sources: VodOut[]; liv
 
 /** 把当前源列表发布到第三方粘贴板，返回可直接填入订阅框的 URL */
 export async function POST(req: Request) {
-  const guarded = guardRequest(req);
+  const guarded = guardAdmin(req);
   if (guarded) return guarded;
 
   let raw: unknown;

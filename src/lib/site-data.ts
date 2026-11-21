@@ -61,20 +61,50 @@ export interface ShortEntry {
   episodes?: { t: string; u: string }[];
 }
 
+/**
+ * 访客访问策略（后台「站点设置」可改，立即生效）：
+ * - open：所有人可看，不需要任何账号（默认，和上游 LibreTV 一致）
+ * - login：必须登录后才能看（注册用户 或 站长密码）
+ * - members：必须持有本站账号（仅注册用户，站长密码不算）
+ */
+export type AccessMode = 'open' | 'login' | 'members';
+
+export interface SiteSettings {
+  /** 访问模式 */
+  accessMode: AccessMode;
+  /** 是否开放注册（关闭后只有站长能在后台建号） */
+  allowRegister: boolean;
+  /** 站名（留空则用代码里的 SITE.name / 环境变量） */
+  siteName?: string;
+  /** 首页轮播口号 */
+  slogan?: string;
+  /** 通知弹窗之外再给一句顶部提示条（留空不显示） */
+  banner?: string;
+  updatedAt: number;
+}
+
 export interface SiteData {
   requests: RequestEntry[];
   tips: TipEntry[];
   notice: NoticeEntry;
   shorts: ShortEntry[];
+  settings: SiteSettings;
 }
 
 const MAX_REQUESTS = 5000;
 const MAX_TIPS = 2000;
 
+const DEFAULT_SETTINGS: SiteSettings = {
+  accessMode: 'open',
+  allowRegister: true,
+  updatedAt: 0,
+};
+
 const DEFAULT_DATA: SiteData = {
   requests: [],
   tips: [],
   shorts: [],
+  settings: { ...DEFAULT_SETTINGS },
   notice: {
     body: '',
     version: 0,
@@ -92,6 +122,21 @@ let cache: SiteData | null = null;
 /** 串行写队列：所有写操作排队执行，避免 read-modify-write 竞态 */
 let writeChain: Promise<unknown> = Promise.resolve();
 
+/** 宽松归一化：配置文件可能被手工编辑过，非法值一律退回默认 */
+export function normalizeSettings(input: unknown): SiteSettings {
+  const raw = (input || {}) as Partial<SiteSettings>;
+  const mode: AccessMode =
+    raw.accessMode === 'login' || raw.accessMode === 'members' ? raw.accessMode : 'open';
+  return {
+    accessMode: mode,
+    allowRegister: raw.allowRegister !== false,
+    siteName: typeof raw.siteName === 'string' ? raw.siteName.slice(0, 40) : undefined,
+    slogan: typeof raw.slogan === 'string' ? raw.slogan.slice(0, 60) : undefined,
+    banner: typeof raw.banner === 'string' ? raw.banner.slice(0, 200) : undefined,
+    updatedAt: Number(raw.updatedAt) || 0,
+  };
+}
+
 function readFile(): SiteData {
   if (cache) return cache;
   const file = dataFile();
@@ -104,6 +149,8 @@ function readFile(): SiteData {
       notice: { ...DEFAULT_DATA.notice, ...(parsed.notice || {}) },
       // 短剧是后加字段，旧文件里没有——按空数组处理，不影响已有数据
       shorts: Array.isArray(parsed.shorts) ? parsed.shorts : [],
+      // 站点设置同理：旧文件没有就退回默认（所有人可看 + 开放注册）
+      settings: normalizeSettings(parsed.settings),
     };
   } catch {
     // 文件不存在 / 内容损坏都退回默认值（损坏时保留一份 .bak 便于排查）
@@ -265,6 +312,21 @@ export function setNotice(patch: { body?: string; enabled?: boolean }): Promise<
   });
 }
 
+// —— 站点设置 ——
+
+export function getSettings(): SiteSettings {
+  return getSiteData().settings;
+}
+
+export function updateSettings(patch: Partial<Omit<SiteSettings, 'updatedAt'>>): Promise<SiteSettings> {
+  return mutate((data) => {
+    const next = normalizeSettings({ ...data.settings, ...patch });
+    next.updatedAt = Date.now();
+    data.settings = next;
+    return next;
+  });
+}
+
 // —— 汇总（后台仪表盘用） ——
 
 export function stats() {
@@ -282,5 +344,9 @@ export function stats() {
       amount: data.tips.reduce((s, t) => s + (Number(t.amount) || 0), 0),
     },
     notice: { enabled: data.notice.enabled, version: data.notice.version },
+    settings: {
+      accessMode: data.settings.accessMode,
+      allowRegister: data.settings.allowRegister,
+    },
   };
 }

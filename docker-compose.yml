@@ -43,7 +43,7 @@ services:
       # - USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36
       # 可选：影视榜单推荐源（60s API）实例地址，官方公共实例有限流
       # - 60S_API_BASE=https://60s.crystelf.top
-      # ——— 君砚影视业务相关 ———
+      # ——— 站点业务相关（求片 / 赞赏 / 通知 / 短剧 / 用户体系） ———
       # 私密短剧 /shorts 的进入口令；不设置时该页面返回 503
       # - SHORTS_PASSWORD=change-me-too
       # 私密短剧口令 cookie 的签名密钥；不设置时依次退回 SHORTS_PASSWORD / PASSWORD

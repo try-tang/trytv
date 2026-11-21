@@ -1,6 +1,6 @@
 # trytv · 改造说明
 
-本仓库 **trytv（君砚影视）** 是把 **LibreTV（Next.js 版，v2.24.0，AGPL-3.0）** 按 <https://carefreestars.dynv6.net/> 的界面与功能改造成的站点。
+本仓库 **trytv（看看电视）** 是把 **LibreTV（Next.js 版，v2.24.0，AGPL-3.0）** 按 <https://carefreestars.dynv6.net/> 的界面与功能改造成的站点。
 
 改造思路是——**不做重写，保留原有采集/聚合/播放内核，只做换皮 + 补业务**：
 
@@ -90,7 +90,7 @@ Docker 部署与上游一致（`docker compose up -d --build`），把 `.env.loc
 **1. `src/lib/site.ts`** —— 站名、Logo 单字、slogan、搜索框文案、标题模板、主题色，以及 8 个功能开关（求片/赞赏/通知/短剧/后台/电视版/下载/榜单）。这些也可以用环境变量覆盖，不必改代码：
 
 ```bash
-NEXT_PUBLIC_SITE_NAME=君砚影视
+NEXT_PUBLIC_SITE_NAME=看看电视
 NEXT_PUBLIC_SITE_MARK=君
 NEXT_PUBLIC_SITE_SLOGAN=每日一部好片
 NEXT_PUBLIC_FEATURE_SHORTS=0     # 关掉私密短剧入口
@@ -144,7 +144,7 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 /api/tip POST/show  → 上墙、累计金额正确
 /api/admin 未登录    → 401；登录后 stats/requests/tips/notice 全通
 /api/shorts 无口令   → 503（未配置）/ 401（口令错）/ cookie 后 200 下发清单
-标题 / manifest      → 「君砚影视 - 每日一部好片」、theme #00a6ff
+标题 / manifest      → 「看看电视 - 每日一部好片」、theme #00a6ff
 ```
 
 ## 八、与目标站的已知差异
@@ -157,3 +157,20 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 ## 九、许可
 
 上游 LibreTV 为 AGPL-3.0，本项目同样遵循；页脚保留署名。二次分发请一并开源你的修改。
+
+## 用户体系与访问策略（v1.0 追加）
+
+| 新增文件 | 作用 |
+| --- | --- |
+| `src/lib/users.ts` | 用户表（`.data/users.json`）、scrypt 密码哈希、`ltv_user` 会话签名 / 解析、`sessionKey()` |
+| `src/lib/api-guard.ts` | `currentActor()` / `actorAllowed()` / `guardRequest()`（按访问模式）/ `guardAdmin()`（只认站长） |
+| `src/middleware.ts` | 全站门槛：读 `/api/access` 拿策略，`/admin` 单独只认站长 cookie，其余未通过 307 → `/login?next=` |
+| `src/app/api/user/route.ts` | 注册 / 登录 / 退出，限流 10 次 / 10 分钟 |
+| `src/app/api/access/route.ts` | 策略 + 身份（middleware 专用，`no-store`） |
+| `src/components/access.tsx` | `AccessProvider` / `useAccess()` |
+| `src/components/access-gate.tsx` | 客户端兜底遮罩（middleware 之外的第二道） |
+| `src/app/login/page.tsx` | 登录 / 注册 / 站长三个 tab |
+
+- 设置项落在 `.data/site.json` 的 `settings`：`accessMode`（`open` / `login` / `members`）、`allowRegister`、`siteName`、`slogan`、`banner`。
+- 后台 `/api/admin` 新增 `?res=users|settings` 与 `settings.save` / `user.create` / `user.disable` / `user.enable` / `user.password` / `user.delete`。
+- 内容接口（`search` / `detail` / `douban` / `hot-list` / `bangumi` / `quality` / `live/*`）用 `guardRequest()`；管理接口（`admin` / `publish` / `source-list` / `source/test`）用 `guardAdmin()`。

@@ -140,6 +140,21 @@ export interface AuthStatusResponse {
   defaultRecommendSource: 'douban' | 'bangumi' | 'hot-list' | null;
   /** 部署者通过 DEFAULT_IMAGE_MODE 环境变量指定的封面图加载方式默认值（未配置时为 null） */
   defaultImageMode: 'direct' | 'proxy' | null;
+  // —— 后台「站点设置」下发的访问策略（缺省视为 open + 开放注册，兼容旧响应）——
+  /** open=所有人可看 / login=登录后可看 / members=仅注册用户 */
+  accessMode?: 'open' | 'login' | 'members';
+  /** 是否开放注册 */
+  allowRegister?: boolean;
+  /** 当前是否已用本站账号登录 */
+  userLoggedIn?: boolean;
+  /** 当前登录用户的昵称 */
+  userNick?: string | null;
+  /** 后台覆盖的站名 / 口号 / 顶部提示条（null 表示用代码默认值） */
+  siteName?: string | null;
+  slogan?: string | null;
+  banner?: string | null;
+  /** 代码默认站名（后台未覆盖时前端用它） */
+  defaultSiteName?: string;
 }
 
 // —— 直播 / IPTV ——

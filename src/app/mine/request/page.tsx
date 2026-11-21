@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
  * 服务端 `/api/request?nick=` 只返回公开字段，不会把后台的处理备注透出去。
  */
 
-const NICK_KEY = 'junya_request_nick';
+const NICK_KEY = 'kan_kan_request_nick';
 
 const STATUS_TEXT: Record<RequestEntry['status'], string> = {
   pending: '排队中',

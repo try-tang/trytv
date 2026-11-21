@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from '@/components/providers';
+import { AccessGate } from '@/components/access-gate';
 import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
@@ -45,7 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          <AccessGate>{children}</AccessGate>
+        </Providers>
       </body>
     </html>
   );

@@ -90,7 +90,7 @@ export const noticeApi = {
   get: () => jsonFetch<{ ok: true; notice: NoticeInfo }>('/api/notice'),
 };
 
-const SEEN_NOTICE_KEY = 'junya_notice_seen';
+const SEEN_NOTICE_KEY = 'kan_kan_notice_seen';
 
 /**
  * 站长通知：只在「有新版本且未读过」时返回内容，读完记版本号。

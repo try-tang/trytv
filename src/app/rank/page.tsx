@@ -148,7 +148,7 @@ function RankContent() {
   /**
    * 点卡片 -> 直接把片名丢进首页搜索。
    * 这里不弹 DetailModal：豆瓣条目没有 sourceKey/vodId，详情弹窗拿它查不到任何源，
-   * 必然报错。原站（君砚）点榜单条目也是同样的行为——跳搜索。
+   * 必然报错，所以榜单条目一律跳搜索。
    */
   const pickTitle = useCallback(
     (title: string) => {
