@@ -1,0 +1,310 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
+import { api } from '@/lib/client-api';
+import type { DoubanItem } from '@/lib/types';
+import { Icon } from './icon';
+import { cn } from '@/lib/utils';
+import { HOME_ROWS } from '@/lib/site';
+
+/**
+ * 首页大 banner：左右两张「今日推荐」卡片轮播（电影 / 剧集各一张）。
+ *
+ * 对应原站 index.html 的 .hero / .hero-track / .hero-arrow / .hero-dots 结构，
+ * 行为也照抄：自动轮播 6s、手指/鼠标横滑切页、左右箭头、圆点指示。
+ * 数据复用现有 /api/douban（tag=热门），不再新增后端接口。
+ */
+
+const AUTO_MS = 6000;
+
+interface HeroSlide {
+  key: string;
+  type: 'movie' | 'tv';
+  tag: string;
+}
+
+const SLIDES: HeroSlide[] = [
+  { key: 'movie', type: 'movie', tag: '热门' },
+  { key: 'tv', type: 'tv', tag: '热门' },
+];
+
+export function HomeHero({ onPick }: { onPick: (title: string) => void }) {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  // 两张卡片各取 6 部候选，轮播时按索引轮换，避免每次都显示同一部。
+  // 注意：hooks 不能写在 map 回调里，这里显式写两次，顺序恒定。
+  const movieQuery = useQuery({
+    queryKey: ['hero', 'movie', '热门'],
+    queryFn: ({ signal }) => api.douban('movie', '热门', 0, 6, signal),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+  const tvQuery = useQuery({
+    queryKey: ['hero', 'tv', '热门'],
+    queryFn: ({ signal }) => api.douban('tv', '热门', 0, 6, signal),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+  const queries = [movieQuery, tvQuery];
+
+  const [rotation, setRotation] = useState<number[]>([0, 0]);
+
+  useEffect(() => {
+    if (paused) return;
+    const timer = setInterval(() => {
+      setIndex((i) => (i + 1) % SLIDES.length);
+      setRotation(([a, b]) => [a + (Math.random() < 0.5 ? 1 : 0), b + (Math.random() < 0.5 ? 1 : 0)]);
+    }, AUTO_MS);
+    return () => clearInterval(timer);
+  }, [paused]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.scrollTo({ left: index * track.clientWidth, behavior: 'smooth' });
+  }, [index]);
+
+  const go = useCallback((dir: -1 | 1) => {
+    setIndex((i) => (i + dir + SLIDES.length) % SLIDES.length);
+  }, []);
+
+  return (
+    <section
+      className="relative"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      aria-roledescription="carousel"
+      aria-label="今日推荐"
+    >
+      <div
+        ref={trackRef}
+        className="flex overflow-x-hidden snap-x snap-mandatory"
+        // 手指横滑后同步索引（原站 hero-track 同样是 scroll-snap 容器）
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (el.clientWidth === 0) return;
+          const next = Math.round(el.scrollLeft / el.clientWidth);
+          if (next !== index && next >= 0 && next < SLIDES.length) setIndex(next);
+        }}
+      >
+        {SLIDES.map((slide, i) => {
+          const data = queries[i].data?.items ?? [];
+          const item: DoubanItem | undefined = data.length
+            ? data[rotation[i] % data.length]
+            : undefined;
+          return (
+            <div key={slide.key} className="min-w-full snap-center">
+              <HeroCard
+                item={item}
+                loading={queries[i].isLoading}
+                label={slide.type === 'movie' ? '今日电影' : '今日剧集'}
+                onPick={onPick}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        aria-label="上一张"
+        onClick={() => go(-1)}
+        className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 text-white/85 backdrop-blur flex items-center justify-center hover:bg-black/65 transition-colors"
+      >
+        <Icon name="arrowLeft" className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        aria-label="下一张"
+        onClick={() => go(1)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 text-white/85 backdrop-blur flex items-center justify-center hover:bg-black/65 transition-colors"
+      >
+        <Icon name="arrowRight" className="w-4 h-4" />
+      </button>
+
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+        {SLIDES.map((slide, i) => (
+          <button
+            key={slide.key}
+            type="button"
+            aria-label={`第 ${i + 1} 张`}
+            aria-current={i === index}
+            onClick={() => setIndex(i)}
+            className={cn(
+              'h-1.5 rounded-full transition-all',
+              i === index ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/60'
+            )}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HeroCard({
+  item,
+  loading,
+  label,
+  onPick,
+}: {
+  item?: DoubanItem;
+  loading: boolean;
+  label: string;
+  onPick: (title: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="relative w-full aspect-[21/9] sm:aspect-[24/9] max-h-[420px] bg-card animate-pulse" />
+    );
+  }
+  if (!item) {
+    return (
+      <div className="relative w-full aspect-[21/9] sm:aspect-[24/9] max-h-[420px] bg-card flex items-center justify-center text-sm text-faint">
+        今日推荐暂时取不到，稍后刷新看看
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full aspect-[21/9] sm:aspect-[24/9] max-h-[420px] overflow-hidden bg-[#0e0e12]">
+      {/* 背景图：原站用同图做底并压暗，没有图时退回纯色 */}
+      {item.cover && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.cover}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 w-full h-full object-cover scale-105 blur-[2px] opacity-45"
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-page via-page/55 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-page/85 via-transparent to-transparent" />
+
+      <div className="relative h-full max-w-6xl mx-auto px-4 sm:px-8 flex items-end pb-10 sm:pb-12 gap-4">
+        {item.cover && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.cover}
+            alt={item.title}
+            className="hidden sm:block w-[92px] h-[132px] object-cover rounded-lg shadow-lg shadow-black/50 shrink-0"
+          />
+        )}
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-1 rounded-full bg-accent text-on-accent text-[11px] font-semibold px-2 py-0.5 mb-2">
+            {label}
+          </div>
+          <h1 className="text-xl sm:text-3xl font-bold text-content truncate">{item.title}</h1>
+          <div className="mt-1.5 flex items-center gap-2 text-xs sm:text-sm text-muted">
+            {item.rating && (
+              <span className="text-rating font-semibold">★ {Number(item.rating).toFixed(1)}</span>
+            )}
+            <span className="text-faint">·</span>
+            <span>{item.isTv ? '剧集' : '电影'}</span>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onPick(item.title)}
+              className="btn-primary h-9 px-4 rounded-full text-sm font-medium"
+            >
+              立即观看
+            </button>
+            <button
+              type="button"
+              onClick={() => onPick(item.title)}
+              className="btn-ghost h-9 px-4 rounded-full text-sm"
+            >
+              找找其它源
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 首页横滑海报墙：一行一个板块（豆瓣热门电影 / 热门剧集 / 豆瓣高分）。
+ * 与原站 .row / .row-head / .row-track 一致，右侧「更多 ›」进榜单页。
+ */
+export function HomeRowSection({
+  row,
+  onPick,
+}: {
+  row: (typeof HOME_ROWS)[number];
+  onPick: (title: string) => void;
+}) {
+  const query = useQuery({
+    queryKey: ['home-row', row.type, row.tag],
+    queryFn: ({ signal }) => api.douban(row.type ?? 'movie', row.tag, 0, 20, signal),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+  const items = query.data?.items ?? [];
+
+  return (
+    <section className="mt-7">
+      <div className="flex items-center justify-between px-4 sm:px-0 mb-2.5">
+        <h2 className="text-[15px] sm:text-base font-semibold text-content flex items-center gap-2">
+          <i className="w-0.5 h-3.5 rounded-full bg-accent" aria-hidden />
+          {row.label}
+        </h2>
+        <Link href={row.href} className="text-xs text-muted hover:text-content transition-colors">
+          更多 ›
+        </Link>
+      </div>
+
+      <div className="flex gap-2.5 overflow-x-auto pb-2 px-4 sm:px-0 snap-x scrollbar-thin">
+        {query.isLoading &&
+          Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="w-[108px] sm:w-[128px] shrink-0 aspect-[2/3] rounded-lg bg-card animate-pulse"
+            />
+          ))}
+
+        {!query.isLoading && items.length === 0 && (
+          <p className="text-xs text-faint py-6">这一栏暂时没有数据</p>
+        )}
+
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onPick(item.title)}
+            className="group w-[108px] sm:w-[128px] shrink-0 snap-start text-left"
+            title={item.title}
+          >
+            <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-chip">
+              {item.cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.cover}
+                  alt={item.title}
+                  loading="lazy"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[11px] text-faint px-1 text-center">
+                  {item.title}
+                </div>
+              )}
+              {item.rating && (
+                <span className="absolute top-1 left-1 rounded bg-black/70 text-rating text-[11px] font-semibold px-1 py-0.5">
+                  {Number(item.rating).toFixed(1)}
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs text-muted truncate group-hover:text-content transition-colors">
+              {item.title}
+            </p>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}

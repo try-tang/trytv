@@ -1,0 +1,23 @@
+node_modules/
+.next/
+out/
+.env
+.env*.local
+*.tsbuildinfo
+vitest-results.json
+*.log
+
+# AI 工具产物（本机会话/缓存数据，不入库）
+.mimosa/
+.zcode/
+.codebuddy/
+generated-images/
+
+# 本机业务数据（求片 / 赞赏 / 通知 / 短剧清单），不进仓库
+.data/
+
+# 构建/安装临时日志
+_build.log
+_dev.log
+_install*.log
+_start.log

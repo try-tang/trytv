@@ -1,0 +1,54 @@
+name: ci
+
+# 每次 push / PR 到 main 都跑：类型检查 + ESLint + 构建。
+#
+# 为什么保留这一层：改造过程中最容易出的问题是「页面能编译、运行时炸」——
+# 比如在 map 回调里调 Hook（rules-of-hooks）、API 签名写错（TS 能查到）、
+# 或者新页面漏了 Suspense 包 useSearchParams。这三类都在下面三步里拦住。
+
+on:
+  pull_request:
+    branches: ['main']
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # 必须 hoisted：pnpm 默认 isolated 链接下 next 找不到
+      # styled-jsx / @swc/helpers / caniuse-lite，构建会直接失败
+      - name: install
+        run: pnpm install --node-linker=hoisted --frozen-lockfile
+
+      - name: typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: lint
+        run: pnpm lint
+
+      - name: build
+        run: pnpm build
+        env:
+          # 构建期没有真实密码也不会失败，但显式给一个避免 503 分支干扰日志
+          PASSWORD: ci-build-password
