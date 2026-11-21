@@ -1,6 +1,6 @@
-# trytv · 君砚影视
+# trytv · 影视
 
-君砚影视（trytv）是一款开源的自托管影视聚合站：多采集站并行搜索、跨源同名聚合、ArtPlayer + hls.js 播放、豆瓣 / Bangumi 推荐、直播 IPTV，并补齐了求片、赞赏留言墙、站长通知、私人短剧、电视版与站长后台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
+try影视（trytv）是一款开源的自托管影视聚合站：多采集站并行搜索、跨源同名聚合、ArtPlayer + hls.js 播放、豆瓣 / Bangumi 推荐、直播 IPTV，并补齐了求片、赞赏留言墙、站长通知、私人短剧、电视版与站长后台。基于 Next.js 15（App Router）+ TypeScript + Tailwind CSS，播放内核为 ArtPlayer + hls.js，支持亮暗双主题。
 
 > 🌐 **形态参考**：[carefreestars.dynv6.net](https://carefreestars.dynv6.net/)（本站按该站形态改造，品牌为「君砚影视」）
 >
