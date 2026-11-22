@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
  * 5. 账号管理：注册用户列表、新建、停用/启用、重置密码、删除。
  */
 
-type Tab = 'requests' | 'tips' | 'notice' | 'settings' | 'users';
+type Tab = 'requests' | 'tips' | 'notice' | 'shorts' | 'settings' | 'users';
 
 interface SettingsInfo {
   accessMode: 'open' | 'login' | 'members';
@@ -34,7 +34,23 @@ interface SettingsInfo {
   siteName?: string;
   slogan?: string;
   banner?: string;
+  /** 私密短剧入口开关 */
+  shortsEnabled?: boolean;
+  /** 短剧口令是否已设置（只回布尔，回显不了明文） */
+  shortsPasswordHash?: string;
+  shortsPasswordAt?: number;
+  /** 成人内容过滤（站点级开关） */
+  adultFilter?: boolean;
   updatedAt: number;
+}
+
+/** 与 src/lib/site-data.ts 的 ShortEntry 一致 */
+interface ShortInfo {
+  id: string;
+  title: string;
+  url: string;
+  poster?: string;
+  desc?: string;
 }
 
 interface AccountInfo {
@@ -52,8 +68,15 @@ interface Stats {
   requests: { total: number; pending: number; done: number };
   tips: { total: number; pending: number; shown: number; amount: number };
   notice: { enabled: boolean; version: number };
-  settings?: { accessMode: 'open' | 'login' | 'members'; allowRegister: boolean };
+  settings?: {
+    accessMode: 'open' | 'login' | 'members';
+    allowRegister: boolean;
+    shortsEnabled?: boolean;
+    shortsPasswordSet?: boolean;
+    adultFilter?: boolean;
+  };
   users?: { total: number; active: number };
+  shorts?: { total: number };
 }
 
 export default function AdminPage() {
@@ -67,6 +90,7 @@ export default function AdminPage() {
   const [notice, setNotice] = useState<NoticeInfo | null>(null);
   const [noticeDraft, setNoticeDraft] = useState('');
   const [settings, setSettings] = useState<SettingsInfo | null>(null);
+  const [shorts, setShorts] = useState<ShortInfo[]>([]);
   const [accounts, setAccounts] = useState<AccountInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,12 +127,14 @@ export default function AdminPage() {
         tips: TipEntry[];
         users?: AccountInfo[];
         settings?: SettingsInfo;
+        shorts?: ShortInfo[];
       }>('/api/admin?res=all');
       setStats(data.stats);
       setRequests(data.requests);
       setTips(data.tips);
       if (data.users) setAccounts(data.users);
       if (data.settings) setSettings(data.settings);
+      setShorts(Array.isArray(data.shorts) ? data.shorts : []);
 
       const n = await noticeApi.get();
       setNotice(n.notice);
@@ -191,6 +217,7 @@ export default function AdminPage() {
           <StatCard label="留言条数" value={stats?.tips.total ?? 0} />
           <StatCard label="赞赏合计" value={stats?.tips.amount ?? 0} subtle />
           <StatCard label="注册用户" value={stats?.users?.total ?? 0} />
+          <StatCard label="私密短剧" value={stats?.shorts?.total ?? 0} subtle />
           <StatCard
             label={ACCESS_LABEL[stats?.settings?.accessMode ?? 'open']}
             value={stats?.users?.active ?? 0}
@@ -205,6 +232,7 @@ export default function AdminPage() {
               { key: 'requests', label: `求片${pendingCount ? ` (${pendingCount})` : ''}` },
               { key: 'tips', label: '赞赏留言' },
               { key: 'notice', label: '站长通知' },
+              { key: 'shorts', label: `私密短剧${shorts.length ? ` (${shorts.length})` : ''}` },
               { key: 'settings', label: '站点设置' },
               { key: 'users', label: `账号${stats?.users?.total ? ` (${stats.users.total})` : ''}` },
             ] as { key: Tab; label: string }[]
@@ -246,6 +274,15 @@ export default function AdminPage() {
             setDraft={setNoticeDraft}
             busy={busy === 'notice'}
             onSave={(body, enabled) => void act('notice', { action: 'notice.save', body, enabled }, '通知已保存')}
+          />
+        ) : tab === 'shorts' ? (
+          <ShortsPanel
+            settings={settings}
+            shorts={shorts}
+            busy={busy}
+            act={async (key, payload, msg) => {
+              await act(key, payload, msg);
+            }}
           />
         ) : tab === 'settings' ? (
           <SettingsPanel
@@ -566,6 +603,7 @@ function SettingsPanel({
   const [siteName, setSiteName] = useState(settings?.siteName ?? '');
   const [slogan, setSlogan] = useState(settings?.slogan ?? '');
   const [banner, setBanner] = useState(settings?.banner ?? '');
+  const [adultFilter, setAdultFilter] = useState(settings?.adultFilter === true);
 
   useEffect(() => {
     setMode(settings?.accessMode ?? 'open');
@@ -573,6 +611,7 @@ function SettingsPanel({
     setSiteName(settings?.siteName ?? '');
     setSlogan(settings?.slogan ?? '');
     setBanner(settings?.banner ?? '');
+    setAdultFilter(settings?.adultFilter === true);
   }, [settings]);
 
   const dirty =
@@ -580,7 +619,8 @@ function SettingsPanel({
     allowRegister !== (settings?.allowRegister ?? true) ||
     siteName !== (settings?.siteName ?? '') ||
     slogan !== (settings?.slogan ?? '') ||
-    banner !== (settings?.banner ?? '');
+    banner !== (settings?.banner ?? '') ||
+    adultFilter !== (settings?.adultFilter === true);
 
   return (
     <div className="space-y-3">
@@ -658,6 +698,32 @@ function SettingsPanel({
         </label>
       </div>
 
+      <div className="rounded-lg border border-line bg-card p-3">
+        <div className="text-sm font-medium text-content mb-1">内容过滤</div>
+        <p className="text-[11px] text-faint mb-2.5">
+          对应上游 LibreTV 的「成人内容过滤」，现在由站点统一决定，不再跟着各自浏览器走。
+        </p>
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={adultFilter}
+            onChange={(e) => setAdultFilter(e.target.checked)}
+            className="mt-0.5 accent-[rgb(var(--c-accent))]"
+          />
+          <span className="min-w-0">
+            <span className="block text-sm text-content">过滤成人内容</span>
+            <span className="block text-[11px] text-faint mt-0.5 leading-relaxed">
+              勾选后，「伦理片」等分类的结果与成人采集源会被排除；默认不勾选。
+            </span>
+          </span>
+        </label>
+        <p className="text-[11px] text-faint mt-2.5">
+          私密短剧的开关与口令在「
+          <span className="text-accent">私密短剧</span>
+          」标签页里设置。
+        </p>
+      </div>
+
       <div className="flex items-center justify-between">
         <span className="text-[11px] text-faint">
           {settings?.updatedAt ? `上次保存：${new Date(settings.updatedAt).toLocaleString('zh-CN')}` : '还没改过设置'}
@@ -673,12 +739,227 @@ function SettingsPanel({
               siteName: siteName.trim(),
               slogan: slogan.trim(),
               banner: banner.trim(),
+              adultFilter,
             })
           }
         >
           {busy ? '保存中…' : '保存设置'}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 私密短剧：入口开关 + 口令 + 清单。
+ *
+ * 对应原站「我的 → 私密短剧（密码进入 · 竖屏连看）」，这里把两件事放到后台：
+ * 1. 口令：只存 scrypt 哈希（lib/users.ts 的 hashPassword），面板永远拿不回明文，
+ *    只能「重设」；环境变量 SHORTS_PASSWORD 仍然有效，两者任一匹配即可进；
+ * 2. 清单：片源地址不进代码、不写 HTML，只有 /api/shorts 校验 cookie 后下发。
+ */
+function ShortsPanel({
+  settings,
+  shorts,
+  busy,
+  act,
+}: {
+  settings: SettingsInfo | null;
+  shorts: ShortInfo[];
+  busy: string | null;
+  act: (key: string, payload: Record<string, unknown>, okMsg: string) => Promise<void>;
+}) {
+  const enabled = settings?.shortsEnabled !== false;
+  const passwordSet = Boolean(settings?.shortsPasswordHash);
+  const [pw, setPw] = useState('');
+  const [title, setTitle] = useState('');
+  const [url, setUrl] = useState('');
+  const [poster, setPoster] = useState('');
+  const [desc, setDesc] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const resetForm = () => {
+    setEditing(null);
+    setTitle('');
+    setUrl('');
+    setPoster('');
+    setDesc('');
+  };
+
+  const startEdit = (item: ShortInfo) => {
+    setEditing(item.id);
+    setTitle(item.title);
+    setUrl(item.url);
+    setPoster(item.poster ?? '');
+    setDesc(item.desc ?? '');
+  };
+
+  const submitItem = () => {
+    const payload = {
+      title: title.trim(),
+      url: url.trim(),
+      poster: poster.trim(),
+      desc: desc.trim(),
+    };
+    if (!payload.title || !payload.url) return;
+    if (editing) {
+      void act('shorts-item', { action: 'shorts.update', id: editing, ...payload }, '已更新').then(
+        resetForm
+      );
+    } else {
+      void act('shorts-item', { action: 'shorts.add', ...payload }, '已添加').then(resetForm);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-line bg-card p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-content">私密短剧</div>
+            <p className="text-[11px] text-faint mt-0.5 leading-relaxed">
+              访客从「我的 → 私密短剧」进入，输对口令后竖屏连看；片源地址只在口令校验通过后下发，
+              页面 HTML 里看不到。
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-muted cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={busy === 'shorts-toggle'}
+              onChange={(e) =>
+                void act('shorts-toggle', { action: 'shorts.save', enabled: e.target.checked }, e.target.checked ? '短剧入口已开启' : '短剧入口已关闭')
+              }
+              className="accent-[rgb(var(--c-accent))]"
+            />
+            开启入口
+          </label>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-line bg-chip/40 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-content">进入口令</span>
+            <span className={cn('text-[11px]', passwordSet ? 'text-accent' : 'text-faint')}>
+              {passwordSet
+                ? `已设置${settings?.shortsPasswordAt ? `（${new Date(settings.shortsPasswordAt).toLocaleDateString('zh-CN')}）` : ''}`
+                : '未设置'}
+            </span>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input
+              type="password"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder={passwordSet ? '输入新口令以重设（至少 4 位）' : '设置一个口令（至少 4 位）'}
+              className="input w-full text-sm"
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              className="btn-primary btn-sm shrink-0"
+              disabled={busy === 'shorts-pw' || !pw.trim()}
+              onClick={() => {
+                void act('shorts-pw', { action: 'shorts.save', password: pw.trim() }, '口令已更新').then(
+                  () => setPw('')
+                );
+              }}
+            >
+              {busy === 'shorts-pw' ? '保存中…' : '保存口令'}
+            </button>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between">
+            <p className="text-[11px] text-faint">
+              口令以哈希形式保存在 .data/site.json，服务器上找不到明文。
+            </p>
+            {passwordSet && (
+              <button
+                type="button"
+                className="text-[11px] text-danger hover:underline shrink-0"
+                disabled={busy === 'shorts-pw'}
+                onClick={() => void act('shorts-pw', { action: 'shorts.save', password: '' }, '口令已清除')}
+              >
+                清除口令
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-line bg-card p-3">
+        <div className="text-sm font-medium text-content mb-2">
+          {editing ? '编辑短剧' : '添加短剧'}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="block">
+            <span className="block text-[11px] text-faint mb-1">片名（必填）</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="input w-full text-sm" />
+          </label>
+          <label className="block">
+            <span className="block text-[11px] text-faint mb-1">视频直链（mp4 / m3u8）</span>
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.com/a.m3u8"
+              className="input w-full text-sm"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-[11px] text-faint mb-1">竖版封面（可选）</span>
+            <input value={poster} onChange={(e) => setPoster(e.target.value)} className="input w-full text-sm" />
+          </label>
+          <label className="block">
+            <span className="block text-[11px] text-faint mb-1">简介（可选）</span>
+            <input value={desc} onChange={(e) => setDesc(e.target.value)} className="input w-full text-sm" />
+          </label>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            className="btn-primary btn-sm"
+            disabled={busy === 'shorts-item' || !title.trim() || !url.trim()}
+            onClick={submitItem}
+          >
+            {busy === 'shorts-item' ? '保存中…' : editing ? '保存修改' : '添加'}
+          </button>
+          {editing && (
+            <button type="button" className="btn-ghost btn-sm" onClick={resetForm}>
+              取消编辑
+            </button>
+          )}
+          <span className="text-[11px] text-faint">需要多集时，直接改 .data/site.json 里的 episodes 数组。</span>
+        </div>
+      </div>
+
+      {shorts.length === 0 ? (
+        <EmptyState icon="tv" title="还没有短剧" description="用上面的表单添加一条，访客输对口令就能看到。" />
+      ) : (
+        <div className="space-y-1.5">
+          {shorts.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-3 rounded-lg border border-line bg-card px-3 py-2"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-content truncate">{item.title}</div>
+                <div className="text-[11px] text-faint truncate">{item.url}</div>
+              </div>
+              <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => startEdit(item)}>
+                编辑
+              </button>
+              <button
+                type="button"
+                className="btn-ghost btn-sm shrink-0 text-danger"
+                disabled={busy === 'shorts-item'}
+                onClick={() =>
+                  void act('shorts-item', { action: 'shorts.delete', id: item.id }, '已删除')
+                }
+              >
+                删除
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

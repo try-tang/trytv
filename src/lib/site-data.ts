@@ -80,6 +80,17 @@ export interface SiteSettings {
   slogan?: string;
   /** 通知弹窗之外再给一句顶部提示条（留空不显示） */
   banner?: string;
+  /** 私密短剧入口是否显示（默认开） */
+  shortsEnabled?: boolean;
+  /**
+   * 短剧口令的 scrypt 哈希（格式与用户密码一致）。
+   * 只存哈希不存明文；环境变量 SHORTS_PASSWORD 仍然有效，两者任一匹配即放行。
+   */
+  shortsPasswordHash?: string;
+  /** 短剧口令的更新时间，便于面板显示「上次改动」 */
+  shortsPasswordAt?: number;
+  /** 是否过滤成人内容（伦理片等分类），默认放开 —— 与上游 LibreTV 设置项对应 */
+  adultFilter?: boolean;
   updatedAt: number;
 }
 
@@ -133,6 +144,13 @@ export function normalizeSettings(input: unknown): SiteSettings {
     siteName: typeof raw.siteName === 'string' ? raw.siteName.slice(0, 40) : undefined,
     slogan: typeof raw.slogan === 'string' ? raw.slogan.slice(0, 60) : undefined,
     banner: typeof raw.banner === 'string' ? raw.banner.slice(0, 200) : undefined,
+    shortsEnabled: raw.shortsEnabled !== false,
+    shortsPasswordHash:
+      typeof raw.shortsPasswordHash === 'string' && raw.shortsPasswordHash
+        ? raw.shortsPasswordHash
+        : undefined,
+    shortsPasswordAt: Number(raw.shortsPasswordAt) || undefined,
+    adultFilter: raw.adultFilter === true,
     updatedAt: Number(raw.updatedAt) || 0,
   };
 }
@@ -327,6 +345,74 @@ export function updateSettings(patch: Partial<Omit<SiteSettings, 'updatedAt'>>):
   });
 }
 
+// —— 私密短剧清单 ——
+
+const MAX_SHORTS = 200;
+
+export interface ShortInput {
+  title?: string;
+  url?: string;
+  poster?: string;
+  desc?: string;
+  episodes?: { t: string; u: string }[];
+}
+
+function normalizeShort(input: ShortInput, base?: ShortEntry): ShortEntry | null {
+  const title = String(input.title ?? base?.title ?? '').trim().slice(0, 80);
+  const url = String(input.url ?? base?.url ?? '').trim();
+  const poster = String(input.poster ?? base?.poster ?? '').trim().slice(0, 500);
+  const desc = String(input.desc ?? base?.desc ?? '').trim().slice(0, 400);
+  const episodes = Array.isArray(input.episodes)
+    ? input.episodes
+        .map((e) => ({ t: String(e?.t ?? '').slice(0, 40), u: String(e?.u ?? '').trim() }))
+        .filter((e) => e.u)
+        .slice(0, 500)
+    : base?.episodes;
+  // 有分集时 url 可留空；否则必须有 url
+  if (!title || (!url && !(episodes && episodes.length))) return null;
+  return {
+    id: base?.id ?? newId('short'),
+    title,
+    url,
+    poster: poster || undefined,
+    desc: desc || undefined,
+    episodes: episodes && episodes.length ? episodes : undefined,
+  };
+}
+
+export function listShorts(): ShortEntry[] {
+  return getSiteData().shorts;
+}
+
+export function addShort(input: ShortInput): Promise<ShortEntry | null> {
+  return mutate((data) => {
+    const entry = normalizeShort(input);
+    if (!entry) return null;
+    data.shorts.unshift(entry);
+    if (data.shorts.length > MAX_SHORTS) data.shorts.length = MAX_SHORTS;
+    return entry;
+  });
+}
+
+export function updateShort(id: string, patch: ShortInput): Promise<ShortEntry | null> {
+  return mutate((data) => {
+    const idx = data.shorts.findIndex((s) => s.id === id);
+    if (idx < 0) return null;
+    const entry = normalizeShort(patch, data.shorts[idx]);
+    if (!entry) return null;
+    data.shorts[idx] = entry;
+    return entry;
+  });
+}
+
+export function removeShort(id: string): Promise<boolean> {
+  return mutate((data) => {
+    const before = data.shorts.length;
+    data.shorts = data.shorts.filter((s) => s.id !== id);
+    return data.shorts.length !== before;
+  });
+}
+
 // —— 汇总（后台仪表盘用） ——
 
 export function stats() {
@@ -347,6 +433,10 @@ export function stats() {
     settings: {
       accessMode: data.settings.accessMode,
       allowRegister: data.settings.allowRegister,
+      shortsEnabled: data.settings.shortsEnabled !== false,
+      shortsPasswordSet: Boolean(data.settings.shortsPasswordHash),
+      adultFilter: data.settings.adultFilter === true,
     },
+    shorts: { total: data.shorts.length },
   };
 }

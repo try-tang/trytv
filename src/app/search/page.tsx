@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/header';
 import { BottomTabs } from '@/components/bottom-tabs';
 import { SiteFooter } from '@/components/site-footer';
-import { ServiceSheet } from '@/components/service-sheet';
 import { HomeRowSection } from '@/components/home-hero';
+import { SectionBoundary } from '@/components/section-boundary';
 import { useSearchHistory } from '@/components/search-history';
 import { SITE, HOME_ROWS } from '@/lib/site';
 import { cn } from '@/lib/utils';
@@ -140,12 +140,10 @@ function SearchContent() {
 
         <div className="mt-6">
           {HOME_ROWS.map((row) => (
-            <HomeRowSection key={row.key} row={row} onPick={go} />
+            <SectionBoundary key={row.key} name={row.label}>
+              <HomeRowSection row={row} onPick={go} />
+            </SectionBoundary>
           ))}
-        </div>
-
-        <div className="mt-8">
-          <ServiceSheet />
         </div>
       </main>
 

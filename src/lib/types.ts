@@ -155,6 +155,12 @@ export interface AuthStatusResponse {
   banner?: string | null;
   /** 代码默认站名（后台未覆盖时前端用它） */
   defaultSiteName?: string;
+  /** 是否过滤成人内容（后台「站点设置」）；缺省视为不过滤 */
+  adultFilter?: boolean;
+  /** 私密短剧入口是否可用 */
+  shortsEnabled?: boolean;
+  /** 短剧口令是否已配置（后台或环境变量） */
+  shortsPasswordSet?: boolean;
 }
 
 // —— 直播 / IPTV ——

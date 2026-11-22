@@ -65,7 +65,7 @@ Docker 部署：仓库根的 `docker-compose.yml` 直接可用（`echo "PASSWORD
 | `/api/request` | POST / GET | 求片提交（匿名）；`?nick=` 查自己的，`?scope=latest` 公开最新 |
 | `/api/tip` | POST / GET | 赞赏留言提交；GET 只返回已审核通过（`shown`）的 |
 | `/api/notice` | GET | 站长通知（公开读） |
-| `/api/shorts` | POST / GET | 口令换签名 cookie（httpOnly，7 天）；GET 校验后下发短剧清单 |
+| `/api/shorts` | POST / GET | 口令换签名 cookie（httpOnly，7 天）；GET 校验后下发短剧清单。口令来源：后台「私密短剧」里的 scrypt 哈希优先，`SHORTS_PASSWORD` 兜底；入口关闭时返回 404 |
 | `/api/admin` | GET / POST | 后台：`?res=stats\|requests\|tips\|all`；action = `request.status` / `request.reply` / `request.delete` / `tip.status` / `tip.delete` / `notice.save` |
 
 后台鉴权直接复用 LibreTV 的 `PASSWORD` + HMAC 签名 cookie（`src/lib/auth.ts`、`src/lib/api-guard.ts`），没有另开一套账号体系。
@@ -89,6 +89,8 @@ Docker 部署：仓库根的 `docker-compose.yml` 直接可用（`echo "PASSWORD
 ```
 
 ## 五、改站只要动两处
+
+**0. 服务区位置** —— `ServiceSheet` 只在 `/mine` 与 `/mine/request` 渲染。首页与搜索页不再出现那排服务入口（站长要求），相关弹窗逻辑没有变。
 
 **1. `src/lib/site.ts`** —— 站名、Logo 单字、slogan、搜索框文案、标题模板、主题色，以及 8 个功能开关（求片/赞赏/通知/短剧/后台/电视版/下载/榜单）。这些也可以用环境变量覆盖，不必改代码：
 
@@ -115,7 +117,7 @@ src/lib/site-data.ts             业务数据层（.data/site.json，串行写�
 src/lib/site-client.ts           业务接口的客户端封装 + 通知弹窗 hook
 src/components/home-hero.tsx     首页轮播 + 横滑片单
 src/components/bottom-tabs.tsx   移动端底部 4 tab
-src/components/service-sheet.tsx 服务区（求片/赞赏/留言板/通知/短剧/下载/电视版/后台）+ 4 个弹窗
+src/components/service-sheet.tsx 服务区（求片/赞赏/留言板/通知/短剧/下载/电视版/后台）+ 4 个弹窗（只挂在「我的」页）
 src/components/mine-panels.tsx   观看记录 / 待看 / 加入待看按钮
 src/app/rank/page.tsx            榜单
 src/app/search/page.tsx          搜索入口

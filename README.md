@@ -343,7 +343,7 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 
 | 变量 | 说明 |
 | --- | --- |
-| `SHORTS_PASSWORD` | 私密短剧 `/shorts` 的进入口令；未设置时该页返回 503 |
+| `SHORTS_PASSWORD` | 私密短剧 `/shorts` 的进入口令（也可以在后台「私密短剧」里设，后台优先存哈希；两处任一匹配即可进入） |
 | `SHORTS_SECRET` | 短剧口令 cookie 的签名密钥；未设置时依次退回 `SHORTS_PASSWORD` / `PASSWORD` |
 | `SITE_DATA_DIR` | 业务数据（求片 / 赞赏 / 通知 / 短剧清单 / 站点设置 / 用户表）落盘目录，默认 `<项目>/.data` |
 | `NEXT_PUBLIC_SERVER_COST` | 赞赏弹窗里「服务器成本每月 N 元」的数字，默认 75 |
@@ -421,7 +421,24 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 
 数据落在 `SITE_DATA_DIR`（默认 `.data/site.json`），单文件 JSON，直接备份这个文件即可。
 
-维护私密短剧清单（同一个 JSON 的 `shorts` 数组）：
+### 私密短剧与成人内容过滤（后台可改，不用改文件）
+
+这两项在上游 LibreTV 里是「数据源管理」面板里的零碎开关，现在统一收到后台：
+
+打开 `/admin` → 登录站长密码 → **私密短剧** 标签页：
+
+| 区块 | 作用 |
+| --- | --- |
+| 开启入口 | 关掉后「我的 → 服务」里不再出现私密短剧，`/api/shorts` 直接返回 404 |
+| 进入口令 | 至少 4 位，只存 scrypt 哈希（`.data/site.json` 的 `settings.shortsPasswordHash`）；面板拿不回明文，只能重设或清除 |
+| 短剧清单 | 表单增删改（片名 + 直链 + 封面 + 简介），落进同一个 JSON 的 `shorts` 数组 |
+
+**站点设置** 标签页里另有「内容过滤 → 过滤成人内容」：勾选后排除「伦理片」等分类与成人采集源，
+默认不勾选。这个开关是站点级策略（写在服务端），不再存在各人浏览器的 localStorage 里。
+
+想让某个访客永远看不到短剧入口，直接关「开启入口」；想临时给朋友看，改口令后发给他就够了。
+
+也可以手工维护短剧清单（`SITE_DATA_DIR` 下 `site.json` 的 `shorts` 数组，后台表单改的就是它）：
 
 ```json
 {

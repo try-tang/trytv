@@ -751,14 +751,8 @@ function HomePanel() {
   const store = useAppStore();
   return (
     <section>
-      <SectionTitle title="首页与内容过滤" />
+      <SectionTitle title="首页与推荐" />
       <div className="space-y-3">
-        <ToggleRow
-          label="成人内容过滤"
-          description="过滤“伦理片”等分类的结果"
-          checked={store.yellowFilter}
-          onChange={(v) => store.updateSettings({ yellowFilter: v })}
-        />
         <ToggleRow
           label="首页推荐"
           description="在首页展示推荐内容"
@@ -776,6 +770,15 @@ function HomePanel() {
           ]}
         />
         <DoubanCategoryEditor />
+        {/* 成人内容过滤移动到了后台「站点设置」：它是站点级策略，不该跟着浏览器走 */}
+        <p className="text-xs text-faint">
+          成人内容过滤已移至
+          <a href="/admin" className="text-accent hover:underline mx-0.5">
+            后台「站点设置」
+          </a>
+          统一控制（当前：
+          {store.yellowFilter ? '已过滤' : '不过滤'}）。
+        </p>
       </div>
     </section>
   );

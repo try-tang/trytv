@@ -41,6 +41,10 @@ export async function GET(req: Request) {
     slogan: settings.slogan || null,
     banner: settings.banner || null,
     defaultSiteName: SITE.name,
+    // —— 内容与短剧开关（后台「站点设置」可改）——
+    adultFilter: settings.adultFilter === true,
+    shortsEnabled: settings.shortsEnabled !== false,
+    shortsPasswordSet: Boolean(settings.shortsPasswordHash || process.env.SHORTS_PASSWORD),
     // 部署者通过 DEFAULT_SOURCES 预置的采集站
     defaultSources: getEnvSources(),
     // 部署者通过 DEFAULT_LIVE_SOURCES 预置的直播源（M3U 订阅）

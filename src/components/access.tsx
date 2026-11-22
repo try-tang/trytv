@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { STATUS_QUERY_KEY } from '@/lib/client-api';
+import { useAppStore } from '@/lib/store';
 import { useToast } from './toast';
 
 /**
@@ -46,6 +47,10 @@ interface AccessState {
   siteName: string | null;
   slogan: string | null;
   banner: string | null;
+  /** 私密短剧入口是否开启（后台「站点设置」） */
+  shortsEnabled: boolean;
+  /** 是否过滤成人内容（后台「站点设置」） */
+  adultFilter: boolean;
   /** 是否能看内容 */
   canView: boolean;
   /** 是否需要（并且值得）挡住内容：open 模式永远 false */
@@ -65,6 +70,8 @@ const DEFAULTS: AccessState = {
   siteName: null,
   slogan: null,
   banner: null,
+  shortsEnabled: true,
+  adultFilter: false,
   canView: true,
   gated: false,
   refresh: async () => {},
@@ -110,6 +117,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
   const [siteName, setSiteName] = useState<string | null>(null);
   const [slogan, setSlogan] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [shortsEnabled, setShortsEnabled] = useState(true);
+  const [adultFilter, setAdultFilter] = useState(false);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -152,9 +161,18 @@ export function AccessProvider({ children }: { children: ReactNode }) {
           siteName?: string | null;
           slogan?: string | null;
           banner?: string | null;
+          adultFilter?: boolean;
+          shortsEnabled?: boolean;
         };
         if (!alive) return;
         setAdmin(Boolean(s.verified));
+        if (typeof s.shortsEnabled === 'boolean') setShortsEnabled(s.shortsEnabled);
+        if (typeof s.adultFilter === 'boolean') setAdultFilter(s.adultFilter);
+        // 成人内容过滤的「源头」在后台站点设置：本地没被用户手动改过时以服务端为准
+        const store = useAppStore.getState();
+        if (typeof s.adultFilter === 'boolean' && !store.yellowFilterTouched) {
+          store.updateSettings({ yellowFilter: s.adultFilter });
+        }
         if (s.accessMode) setAccessMode(s.accessMode);
         if (typeof s.allowRegister === 'boolean') setAllowRegister(s.allowRegister);
         setSiteName(s.siteName ?? null);
@@ -222,6 +240,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       siteName,
       slogan,
       banner,
+      shortsEnabled,
+      adultFilter,
       canView,
       gated: accessMode !== 'open' && !canView,
       refresh,
@@ -238,6 +258,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       siteName,
       slogan,
       banner,
+      shortsEnabled,
+      adultFilter,
       canView,
       refresh,
       loginUser,

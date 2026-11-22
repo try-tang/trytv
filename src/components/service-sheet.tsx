@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { FEATURES, SITE } from '@/lib/site';
 import { useToast } from './toast';
+import { useAccess } from './access';
 import { useNoticePopup, requestApi, tipApi } from '@/lib/site-client';
 import type { TipEntry } from '@/lib/site-data';
 import { useFocusTrap } from './use-focus-trap';
@@ -14,12 +15,13 @@ import { Icon } from './icon';
  * 服务区：对应原站「我的」页底部那组 svc-item（求片 / 赞赏支持 / 赞赏留言板 /
  * 站长通知 / 私密短剧 / 软件下载 / 电视版 / 管理员后台）。
  *
- * 首页与「我的」页共用这一个组件，避免两处维护同一批弹窗。
+ * 只挂载在「我的」页：首页与搜索页不再显示这块（站长要求服务区收进我的）。
  */
 export function ServiceSheet() {
   const [sheet, setSheet] = useState<null | 'request' | 'tip' | 'tipwall' | 'notice'>(null);
   const { toast } = useToast();
   const noticePopup = useNoticePopup();
+  const { shortsEnabled } = useAccess();
 
   const items: { key: string; icon: string; label: string; note?: string; href?: string; onClick?: () => void }[] = [];
 
@@ -39,7 +41,8 @@ export function ServiceSheet() {
   if (FEATURES.notice) {
     items.push({ key: 'notice', icon: '📢', label: '站长通知', onClick: () => setSheet('notice') });
   }
-  if (FEATURES.shorts) {
+  // 短剧入口受后台「站点设置 → 私密短剧」开关控制：关掉后这里直接不显示
+  if (FEATURES.shorts && shortsEnabled) {
     items.push({ key: 'shorts', icon: '🔒', label: '私密短剧', note: '密码进入', href: '/shorts' });
   }
   if (FEATURES.download) {

@@ -18,6 +18,8 @@ export interface AppSettings {
   customAPIs: SourceConfig[];
   selectedKeys: string[];
   yellowFilter: boolean;
+  /** 用户是否在本地手动调过成人过滤；为 false 时以后台「站点设置」为准 */
+  yellowFilterTouched: boolean;
   adFilter: boolean;
   doubanEnabled: boolean;
   /** 首页推荐数据源：豆瓣热门 / Bangumi 每日放送（免 key）/ 影视热榜（60s API） */
@@ -349,7 +351,9 @@ export const useAppStore = create<AppState>()(
       qualityMap: {},
       envSubsSeen: [],
       selectedKeys: [],
-      yellowFilter: true,
+      // 默认不过滤（与上游 LibreTV 一致）；需要过滤时到后台「站点设置」打开
+      yellowFilter: false,
+      yellowFilterTouched: false,
       adFilter: true,
       doubanEnabled: true,
       recommendSource: 'hot-list',
@@ -843,6 +847,7 @@ export const useAppStore = create<AppState>()(
         // DEFAULT_RECOMMEND_SOURCE / DEFAULT_IMAGE_MODE 默认值不再覆盖该用户的选择
         const touched = 'recommendSource' in patch;
         const imageTouched = 'imageProxyMode' in patch;
+        const filterTouched = 'yellowFilter' in patch;
         // 打开成人内容过滤时，同步取消勾选所有成人源，避免两者并存
         if (patch.yellowFilter === true) {
           const adultKeys = new Set(
@@ -854,6 +859,7 @@ export const useAppStore = create<AppState>()(
             ...patch,
             ...(touched ? { recommendSourceTouched: true } : null),
             ...(imageTouched ? { imageProxyModeTouched: true } : null),
+            ...(filterTouched ? { yellowFilterTouched: true } : null),
             selectedKeys: get().selectedKeys.filter((k) => !adultKeys.has(k)),
           });
           return;
@@ -862,6 +868,7 @@ export const useAppStore = create<AppState>()(
           ...patch,
           ...(touched ? { recommendSourceTouched: true } : null),
           ...(imageTouched ? { imageProxyModeTouched: true } : null),
+          ...(filterTouched ? { yellowFilterTouched: true } : null),
         });
       },
     }),
@@ -879,11 +886,15 @@ export const useAppStore = create<AppState>()(
       // v8：订阅新增 refreshDays / failStreak——两者都缺省即「纯手动 + 无失败记录」，
       //     与旧行为完全一致，因此无需改写存量数据，仅借版本号让 migrate 跑一遍。
       // v9：首页推荐新增自定义栏目列表；老快照补空数组，继续使用内置分类。
+      // v10：成人内容过滤改为后台站点设置统一控制，老快照打上「未手动修改」标记。
       // 此前未声明 version 的存量数据会被视为 v0 并走 migrate 补齐。
-      version: 9,
+      version: 10,
       migrate: (persisted, version) => {
         const state = { ...((persisted ?? {}) as Partial<AppState>) };
         if (!Array.isArray(state.liveRecent)) state.liveRecent = [];
+        // v10：成人过滤的源头挪到后台「站点设置」。老快照里没有 touched 标记，
+        // 一律视为「没手动改过」，让服务端的 adultFilter 覆盖掉旧的本地默认值。
+        if (typeof state.yellowFilterTouched !== 'boolean') state.yellowFilterTouched = false;
         if (!Array.isArray(state.liveSubscriptions)) state.liveSubscriptions = [];
 
         // v3 的片头/片尾双标记 → v4 的 segments（纯函数，脏数据在内部丢弃）

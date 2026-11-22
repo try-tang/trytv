@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { getSiteData } from '@/lib/site-data';
+import { getSettings, getSiteData } from '@/lib/site-data';
+import { verifyPassword } from '@/lib/users';
 
 export const runtime = 'nodejs';
 
@@ -58,10 +59,22 @@ function readItems(): unknown[] {
   return Array.isArray(data.shorts) ? (data.shorts as unknown[]) : [];
 }
 
+/** 口令来源：后台「站点设置」里存的哈希优先，环境变量 SHORTS_PASSWORD 兜底 */
+function hasConfiguredSecret(): boolean {
+  const settings = getSettings();
+  return Boolean(settings.shortsPasswordHash || process.env.SHORTS_PASSWORD);
+}
+
 export async function GET() {
-  const configured = Boolean(process.env.SHORTS_PASSWORD);
-  if (!configured) {
-    return NextResponse.json({ error: '站长还没配置短剧口令（SHORTS_PASSWORD）' }, { status: 503 });
+  const settings = getSettings();
+  if (settings.shortsEnabled === false) {
+    return NextResponse.json({ error: '短剧入口已关闭' }, { status: 404 });
+  }
+  if (!hasConfiguredSecret()) {
+    return NextResponse.json(
+      { error: '站长还没设置短剧口令，到后台「站点设置 → 私密短剧」里设一个' },
+      { status: 503 }
+    );
   }
   const jar = await cookies();
   if (!verifyCookie(jar.get(COOKIE)?.value)) {
@@ -71,9 +84,17 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const expected = process.env.SHORTS_PASSWORD;
-  if (!expected) {
-    return NextResponse.json({ error: '站长还没配置短剧口令（SHORTS_PASSWORD）' }, { status: 503 });
+  const settings = getSettings();
+  if (settings.shortsEnabled === false) {
+    return NextResponse.json({ error: '短剧入口已关闭' }, { status: 404 });
+  }
+  const envSecret = process.env.SHORTS_PASSWORD;
+  const storedHash = settings.shortsPasswordHash;
+  if (!storedHash && !envSecret) {
+    return NextResponse.json(
+      { error: '站长还没设置短剧口令，到后台「站点设置 → 私密短剧」里设一个' },
+      { status: 503 }
+    );
   }
 
   let body: { password?: unknown };
@@ -84,7 +105,10 @@ export async function POST(req: Request) {
   }
 
   const input = typeof body.password === 'string' ? body.password : '';
-  if (!input || !sameSecret(input, expected)) {
+  // 后台哈希与环境变量都给一次机会：站长改过口令后老环境变量仍然能进，避免锁死
+  const okStored = input && storedHash ? verifyPassword(input, storedHash) : false;
+  const okEnv = input && envSecret ? sameSecret(input, envSecret) : false;
+  if (!input || (!okStored && !okEnv)) {
     // 简单的失败延迟，压一下暴力猜测
     await new Promise((r) => setTimeout(r, 400));
     return NextResponse.json({ error: '口令不对' }, { status: 401 });

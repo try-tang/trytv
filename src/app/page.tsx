@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
+import { SectionBoundary } from '@/components/section-boundary';
 import { HomeHero, HomeRowSection } from '@/components/home-hero';
 import { DetailModal } from '@/components/detail-modal';
 import { AggregatedCard, aggregateResults } from '@/components/video-card';
@@ -15,7 +16,6 @@ import { HOME_ROWS } from '@/lib/site';
 import { validateSourceUrl } from '@/lib/utils';
 import { EmptyState } from '@/components/states';
 import { SiteFooter } from '@/components/site-footer';
-import { ServiceSheet } from '@/components/service-sheet';
 import { BottomTabs } from '@/components/bottom-tabs';
 
 /**
@@ -159,17 +159,17 @@ function HomeContent() {
 
       {!searching && (
         <main className="pb-6">
-          <HomeHero onPick={pickTitle} />
+          {/* 每个区块单独兜底：豆瓣接口抖动只影响自己那一段，不再整页报错 */}
+          <SectionBoundary name="首页轮播">
+            <HomeHero onPick={pickTitle} />
+          </SectionBoundary>
 
           <div className="max-w-6xl mx-auto">
             {HOME_ROWS.map((row) => (
-              <HomeRowSection key={row.key} row={row} onPick={pickTitle} />
+              <SectionBoundary key={row.key} name={row.label}>
+                <HomeRowSection row={row} onPick={pickTitle} />
+              </SectionBoundary>
             ))}
-          </div>
-
-          {/* 移动端服务区入口（原站「我的 → 服务」那组；桌面收进顶栏图标） */}
-          <div className="max-w-6xl mx-auto px-4 sm:px-0 mt-8">
-            <ServiceSheet />
           </div>
         </main>
       )}
