@@ -1,6 +1,9 @@
 services:
   trytv:
-    build: .
+    # 构建上下文固定为文件所在目录：从任何路径执行 compose，都能找到 Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
     # 版本管理：镜像 tag 与 package.json 的 version 保持一致
     # - 使用者：不设置 TRYTV_IMAGE 即拉取 ghcr.io/try-tang/trytv:latest（首次部署用 docker compose pull）
     # - 开发者：docker compose up -d --build 会在本地构建并打上同名 tag
@@ -10,13 +13,25 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    # 观看历史在浏览器 IndexedDB、设置在 localStorage，无需挂载卷；
-    # 但求片/赞赏/站长通知/短剧清单落在容器内 .data 目录，必须挂出来，否则重建容器即丢
+    # 健康检查：容器内 /api/status 是免鉴权接口，200 即视为就绪
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # 观看历史在浏览器 IndexedDB、设置在 localStorage，与本卷无关；
+    # 但求片/赞赏/站长通知/短剧清单/注册用户落在容器内 .data，必须挂卷，否则重建容器即丢
     volumes:
-      - ./data:/app/.data
+      # 用命名卷而不是 ./data 绑定挂载：容器内以非 root（uid 1000）运行，
+      # 宿主机目录的属主往往对不上，写 site.json 会 EACCES / EPERM。
+      # 需要直接看文件时：docker compose exec trytv ls -l /app/.data
+      - trytv-data:/app/.data
     environment:
       # 必填：访问密码（在 .env 中设置，缺失时 compose 启动即报错提醒）
       - PASSWORD=${PASSWORD:?请在 .env 中设置 PASSWORD}
+      # 业务数据目录（命名卷挂到这里），显式声明避免各家默认值差异
+      - SITE_DATA_DIR=/app/.data
       # 可选：会话/代理签名密钥（多实例部署建议显式设置：openssl rand -hex 32）
       # - PROXY_SECRET=your-secret
       # 可选：Cookie Secure 策略覆盖（true=强制开启 / false=强制关闭；不设置时按请求协议自动推导，HTTP 部署无需配置）
@@ -48,5 +63,9 @@ services:
       # - SHORTS_PASSWORD=change-me-too
       # 私密短剧口令 cookie 的签名密钥；不设置时依次退回 SHORTS_PASSWORD / PASSWORD
       # - SHORTS_SECRET=
-      # 业务数据落盘目录（求片 / 赞赏 / 通知 / 短剧清单），默认 /app/.data，已挂载到宿主机 ./data
-      # - SITE_DATA_DIR=/app/.data
+      # 业务数据目录已在上面 environment 里固定为 /app/.data（命名卷 trytv-data），无需再改
+
+volumes:
+  # 求片 / 赞赏留言 / 站长通知 / 私密短剧 / 注册用户全部落在这里
+  # 备份：docker run --rm -v trytv_trytv-data:/d -v "$PWD":/b alpine tar czf /b/trytv-data.tar.gz -C /d .
+  trytv-data:

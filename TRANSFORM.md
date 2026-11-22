@@ -33,7 +33,10 @@ pnpm build && pnpm start
 > node -r ./tools/next-build-shim.js node_modules/next/dist/bin/next start -p 3000
 > ```
 
-Docker 部署与上游一致（`docker compose up -d --build`），把 `.env.local` 里的变量写进 `docker-compose.yml` 的 `environment` 即可。
+Docker 部署：仓库根的 `docker-compose.yml` 直接可用（`echo "PASSWORD=xxx" > .env && docker compose up -d --build`）。
+镜像三阶段构建（deps → builder → runner），业务数据挂命名卷 `trytv-data:/app/.data`；
+想让业务变量生效，把它们写进 compose 的 `environment:`（`.env` 只用于 compose 插值，不进镜像）。
+`docker compose pull` 依赖 GHCR 上已有镜像 —— 仓库没推过 `v*` tag 时镜像是空的，此时走 `--build` 或先发 tag。
 
 ---
 

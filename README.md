@@ -24,7 +24,7 @@ trytv（看看电视）是一款开源的自托管影视聚合站：多采集站
 - [部署](#部署)
   - [Docker（推荐）](#docker推荐)
   - [Docker Compose](#docker-compose)
-  - [免 Docker 运行（预构建包）](#免-docker-运行预构建包)
+  - [免 Docker 运行（standalone 包）](#免-docker-运行standalone-包)
   - [手动运行（Node）](#手动运行node)
   - [反向代理（Nginx / Caddy）](#反向代理nginx--caddy)
   - [环境变量](#环境变量)
@@ -107,103 +107,165 @@ node -r ./tools/next-build-shim.js node_modules/next/dist/bin/next start -p 8080
 
 ## 部署
 
-### Docker（推荐）
+### Docker Compose（推荐，一条命令）
+
+仓库根目录的 `docker-compose.yml` 直接可用，不需要改任何一行：
 
 ```bash
-# 1. 准备密码
+git clone https://github.com/try-tang/trytv.git && cd trytv
+
+# 只需一个密码文件
 echo "PASSWORD=your-password" > .env
 
-# 2. 构建并启动（源码构建）
-docker compose up -d --build
+docker compose up -d --build      # 本地构建并启动
+docker compose logs -f            # 看启动日志
+```
 
-# 或者直接用已发布的镜像（零构建）
+打开 `http://服务器IP:8080`，用 `.env` 里的 `PASSWORD` 进入站长后台，再到「站点设置」里配访问模式（所有人可看 / 登录后可看 / 仅注册用户）、是否开放注册、站名与口号。
+
+> **数据落在命名卷 `trytv_trytv-data` 里挂到 `/app/.data`**（求片、赞赏留言、站长通知、短剧清单、注册用户）。
+> 用命名卷而不是 `./data` 绑定挂载，是因为容器以非 root（uid 1000）运行，绑定宿主机目录经常因属主不符报 `EACCES`。
+> 备份 / 恢复：
+>
+> ```bash
+> docker run --rm -v trytv_trytv-data:/d -v "$PWD":/b alpine tar czf /b/trytv-data.tar.gz -C /d .
+> docker run --rm -v trytv_trytv-data:/d -v "$PWD":/b alpine sh -c 'cd /d && tar xzf /b/trytv-data.tar.gz'
+> ```
+>
+> 想直接用宿主机目录也很简单：把 compose 里的 `- trytv-data:/app/.data` 换成 `- ./data:/app/.data`，并执行 `sudo chown -R 1000:1000 ./data`。
+
+**从已发布镜像部署（零构建）**：先给仓库打 tag `v1.0.0` 触发 `.github/workflows/docker-publish.yml`，镜像推好后：
+
+```bash
 docker compose pull && docker compose up -d
 ```
 
-打开 `http://服务器IP:8080`，用 `.env` 里的 `PASSWORD` 登录。
+> 镜像地址 `ghcr.io/try-tang/trytv`（`<tag>` / `latest` 两套标签，`linux/amd64` + `linux/arm64` 双架构）。
+> 仓库是 public，拉取无需登录；仓库若改回 private，需先 `echo $GITHUB_TOKEN | docker login ghcr.io -u <用户名> --password-stdin`。
+> 固定版本写进 `.env`：`TRYTV_IMAGE=ghcr.io/try-tang/trytv:1.0.0`。
 
-> 镜像：`ghcr.io/try-tang/trytv`（`latest` / `1.0` / 完整版本号三个 tag，`linux/amd64` 与 `linux/arm64` 双架构）。
-> 需要固定版本时在 `.env` 中设置 `TRYTV_IMAGE=ghcr.io/try-tang/trytv:<版本>`。
-> 版本号以 `package.json` 为单一来源，部署后可用 `/api/status` 返回的 `version` 字段核对。
-
-直接用 `docker run`：
+**直接用 `docker run`**（不想用 compose 时）：
 
 ```bash
 docker run -d --name trytv \
   -p 8080:8080 \
   -e PASSWORD=your-password \
   -e SHORTS_PASSWORD=shorts-password \
-  -v "$(pwd)/data:/app/.data" \
+  -v trytv-data:/app/.data \
   --restart unless-stopped \
   ghcr.io/try-tang/trytv:latest
 ```
 
-> ⚠️ **`-v ...:/app/.data` 不要省**：求片、赞赏留言、站长通知、短剧清单都存在 `/app/.data/site.json`，不挂卷重建容器就全丢。
+> ⚠️ **`-v ...:/app/.data` 不要省**：业务数据都在那里，不挂卷重建容器就全丢。
 
-### Docker Compose
+#### Docker 常见报错
 
-仓库内的 `docker-compose.yml` 已是完整版，最小可用形态：
+| 报错 | 原因 | 处理 |
+| --- | --- | --- |
+| `invalid reference format` / `Error while fetching server API version` | 没装 Docker 或守护进程没起 | 先 `docker info` 确认能连上引擎；Linux 上 `sudo systemctl start docker`，并确认当前用户在 `docker` 组 |
+| `required variable PASSWORD is missing a value` | 没建 `.env` | 在**与 `docker-compose.yml` 同一目录**下 `echo "PASSWORD=xxx" > .env`，或在 `environment:` 里直接写死 |
+| `pull access denied for ghcr.io/try-tang/trytv` | 镜像还没发布（尚未打过 `v*` tag） | 用源码构建：`docker compose up -d --build` |
+| `npm ci` 阶段报 `lock file ... not in sync` | `package-lock.json` 与 `package.json` 漂移 | Dockerfile 已内置兜底（自动退回 `npm install`），但建议本地 `npm install --package-lock-only` 后重新提交 |
+| 页面能开但求片/注册报 500，日志出现 `EACCES` / `EPERM` | 挂载目录属主与容器内 uid 1000 不符 | 用命名卷（默认已如此），或 `sudo chown -R 1000:1000 ./data` |
+| 容器起来就退出 | 端口占用或 `server.js` 缺失 | `docker compose logs trytv` 看第一行错误；端口冲突改 `ports: - "8090:8080"` |
+| 健康状态 `unhealthy` | `/api/status` 访问不到 | 多为 `PASSWORD` 未设或端口映射写错；`docker compose exec trytv wget -qO- http://127.0.0.1:8080/api/status` 自测 |
+
+#### 构建镜像的两种方式
+
+```bash
+# 方式 A：compose 构建（推荐，会同时打好 ghcr.io/try-tang/trytv:latest 标签）
+docker compose up -d --build
+
+# 方式 B：纯 docker build
+docker build -t trytv:local .
+docker run -d -p 8080:8080 -e PASSWORD=your-password -v trytv-data:/app/.data trytv:local
+```
+
+> 镜像用 `node:22-alpine` 三阶段构建（deps → builder → runner），运行阶段只带 `standalone` 产物，非 root 运行。
+> `DOCKER_BUILD=1` 会让 `next.config.ts` 输出 `standalone`；构建期不要把真实 `PASSWORD` 塞进 build-args，否则会被内联进产物。
+
+### 最小 compose（自己写一份时参考）
 
 ```yaml
 services:
   trytv:
-    image: ghcr.io/try-tang/trytv:latest
+    image: ${TRYTV_IMAGE:-ghcr.io/try-tang/trytv:latest}
     container_name: trytv
     restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/app/.data          # 业务数据持久化，必挂
+      - trytv-data:/app/.data          # 业务数据持久化，必挂
     environment:
-      - PASSWORD=change-me         # 必填：访问密码
-      - SHORTS_PASSWORD=change-me-too   # 可选：私密短剧口令
-      # - PROXY_SECRET=your-secret            # 会话/代理签名密钥，多实例部署建议设置
+      - PASSWORD=change-me             # 必填：站长密码
+      - SITE_DATA_DIR=/app/.data
+      # - SHORTS_PASSWORD=change-me-too      # 私密短剧口令
+      # - PROXY_SECRET=your-secret           # 会话/代理签名密钥，多实例部署建议设置
       # - DEFAULT_SOURCES=[{"name":"示例源","url":"https://example.com/api.php/provide/vod"}]
       # - DEFAULT_LIVE_SOURCES=[{"name":"示例直播源","url":"https://example.com/list.m3u"}]
       # - DEFAULT_SUBSCRIPTIONS=["https://example.com/sources.json"]
-      # - DEFAULT_RECOMMEND_SOURCE=douban     # 首页推荐数据源（douban/bangumi/hot-list）
-      # - LIVE_ALLOW_PRIVATE=1                # 自建内网 IPTV 源时开启
+      # - DEFAULT_RECOMMEND_SOURCE=douban    # 首页推荐数据源（douban/bangumi/hot-list）
+      # - LIVE_ALLOW_PRIVATE=1               # 自建内网 IPTV 源时开启
+
+volumes:
+  trytv-data:
 ```
 
 ```bash
-docker compose pull && docker compose up -d
+docker compose up -d --build    # 源码构建（仓库自带 compose 就是这个形态）
 docker compose logs -f          # 看启动日志
-docker compose down             # 停止（./data 保留）
+docker compose down             # 停止，命名卷保留
+docker compose down -v          # 停止并连数据一起删除（谨慎）
 ```
 
 其余可选变量见 [环境变量](#环境变量)。
 
-### 免 Docker 运行（预构建包）
+### 免 Docker 运行（自己从源码打 standalone 包）
 
-不想装 Docker 也可以用 release 里的独立产物，解压即跑：
+不想装 Docker、又不想让 `npm install` 在服务器上跑一遍，可以本地打一个独立产物再拷过去：
 
 ```bash
-# 1. 从 Releases 下载对应平台包（如 trytv-1.0.0-standalone-linux-x64.tar.gz）
-# 2. 解压并进入目录
-tar -xzf trytv-1.0.0-standalone-*.tar.gz && cd trytv
+# 1. 本地（或 CI）构建
+npm install
+DOCKER_BUILD=1 npm run build          # DOCKER_BUILD=1 才会输出 .next/standalone
 
-# 3. 起服务（首次会在当前目录生成 .data 存业务数据）
+# 2. 组装成可搬走的目录
+mkdir -p trytv-standalone && cp -r .next/standalone/. trytv-standalone/
+mkdir -p trytv-standalone/.next && cp -r .next/static trytv-standalone/.next/static
+cp -r public trytv-standalone/public
+tar -czf trytv-standalone.tar.gz trytv-standalone
+
+# 3. 服务器上解压即跑（只需要 Node.js 18+，不用装依赖）
+tar -xzf trytv-standalone.tar.gz && cd trytv-standalone
 PASSWORD=your-password PORT=8080 node server.js
 ```
 
-> 预构建包由 `.github/workflows/docker-publish.yml` 同源的 CI 产出，运行时只需要 Node.js 18+。
-> Windows 用户可直接下载 `*standalone-win-x64.zip`，解压后双击 `start.bat`（或 `set PASSWORD=xxx && node server.js`）。
+Windows 下打包把 `tar -czf` 换成 `Compress-Archive -Path trytv-standalone -DestinationPath trytv-standalone.zip`，启动改成：
+
+```powershell
+$env:PASSWORD="your-password"; $env:PORT="8080"; node server.js
+```
+
+> 业务数据 `users.json` / `site.json` 首次启动时在**当前工作目录**的 `.data/` 里生成；用 `SITE_DATA_DIR=/某个绝对路径` 可以改落点。
+> 三样东西缺一不可：`server.js`、`.next/static`、`public`。只拷 `server.js` 会出现页面能开但样式与图标全丢。
 
 ### 手动运行（Node）
 
-需要 **Node.js 18+**（推荐 22）。
+需要 **Node.js 22**（`Dockerfile` 与 CI 都是 22；18/20 未验证）。
 
 ```bash
-# 方式一：npm
-npm install
+# 方式一：npm（与 Dockerfile 一致，锁文件是 package-lock.json）
+npm ci
 PASSWORD=your-password npm run build
 PASSWORD=your-password npm start        # 监听 8080
 
-# 方式二：pnpm（注意 node-linker）
+# 方式二：pnpm（与 CI 一致，注意 node-linker）
 pnpm install --node-linker=hoisted
 PASSWORD=your-password pnpm build
 PASSWORD=your-password pnpm start
 ```
+
+> **为什么必须 `--node-linker=hoisted`**：pnpm 默认 isolated 软链接下 Next 找不到 `styled-jsx` / `@swc/helpers` / `caniuse-lite`，构建会直接失败。
 
 Windows PowerShell：
 
@@ -484,7 +546,14 @@ git push && git push --tags
 | `.github/workflows/ci.yml` | push / PR 到 `main` | `pnpm install --node-linker=hoisted --frozen-lockfile` → `tsc --noEmit` → `eslint` → `next build` |
 | `.github/workflows/docker-publish.yml` | 推 `v*` tag 或手动 | amd64 / arm64 分别 buildx 构建推 `ghcr.io/try-tang/trytv`，再合并成多架构 manifest 并补 `latest` |
 
-两个 workflow 都只用内置 `GITHUB_TOKEN`，不需要配置任何 secrets（私有仓库同样可跑）。
+两个 workflow 都只用内置 `GITHUB_TOKEN`，不需要配置任何 secrets。
+
+> ⚠️ 仓库建好后**没有推过任何 tag，所以 `ghcr.io/try-tang/trytv` 目前还是空的**——这时 `docker compose pull` 会报 `manifest unknown` / `denied`。
+> 两种做法：
+> 1. **源码构建**（立刻可用）：`docker compose up -d --build`
+> 2. **先发镜像**：`git tag v1.0.0 && git push origin v1.0.0`，等 Actions 里 `docker-publish` 三个 job 全绿，再 `docker compose pull && docker compose up -d`
+>
+> 镜像第一次发布后，到仓库 `Settings → Packages` 确认 `trytv` 包的可见性与仓库一致（public 仓库的包默认 public，拉取无需登录）。
 
 ## 安全说明
 

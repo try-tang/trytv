@@ -2,6 +2,7 @@
 node_modules
 .next
 out
+.aider*
 tsconfig.tsbuildinfo
 
 # 版本控制与 CI
@@ -9,14 +10,20 @@ tsconfig.tsbuildinfo
 .gitignore
 .github
 
-# 本地环境与日志
+# 本地环境与日志（.env 只能本地用，绝不进镜像）
 .env
 .env*.local
 *.log
 
-# 文档与编排文件（不参与镜像构建）
-Dockerfile
-docker-compose.yml
+# 本地数据（求片/赞赏/通知/短剧/用户），运行时由卷挂载提供
+.data
+data
+
+# 本地临时产物
+_dockerbuild
+_run
+_*.log
+
+# 纯文档：不参与镜像构建
 docs
-README.md
-LICENSE
+TRANSFORM.md
