@@ -92,7 +92,7 @@ trytv（看看电视）是一款开源的自托管影视聚合站：多采集站
 
 ```bash
 npm install
-cp .env.example .env.local        # 至少填 PASSWORD=你的访问密码
+cp .env.example .env.local        # 可选：改密码与站名；默认密码是 admin
 npm run build && npm start          # http://localhost:8080
 ```
 
@@ -115,23 +115,36 @@ node -r ./tools/next-build-shim.js node_modules/next/dist/bin/next start -p 8080
 git clone https://github.com/try-tang/trytv.git && cd trytv
 ```
 
-**2）在同目录建一个 `.env`（只放密码，必须）**
-
-```bash
-echo "PASSWORD=你的站长密码" > .env
-```
-
-> 文件名必须是 `.env`（不是 `.env.local`，也不是 `env`），且在 `docker-compose.yml` **同一目录**。
-> `PASSWORD` 缺失时 compose 会在启动前直接报 `required variable PASSWORD is missing a value` 并退出 —— 这是故意做的保护。
-
-**3）启动**
+**2）启动（不需要建任何配置文件）**
 
 ```bash
 docker compose up -d --build
 docker compose logs -f        # Ctrl+C 退出日志，不影响容器
 ```
 
-打开 `http://服务器IP:8080`，右上角齿轮 → 用 `PASSWORD` 登录站长后台 → 「站点设置」里配访问模式（所有人可看 / 登录后可看 / 仅注册用户）、是否开放注册、站名与口号。
+打开 `http://服务器IP:8080` → 右上角齿轮 → 用默认站长密码登录：
+
+| 账号 | 密码 |
+| --- | --- |
+| `admin`（无需填用户名，只填密码） | `admin` |
+
+进去后在「站点设置」里配访问模式（所有人可看 / 登录后可看 / 仅注册用户）、是否开放注册、站名与口号，在「私密短剧」页签设短剧口令与清单。
+
+> ## ⚠️ 上线前务必改掉默认密码
+>
+> 默认密码 `admin` 写在公开仓库里，**任何人拿到你的地址都能登后台**。
+>
+> 改法：在 `docker-compose.yml` 同目录建一个 `.env` 文件（不是 `.env.local`，也不是 `env`）：
+>
+> ```bash
+> echo "PASSWORD=换成你自己的密码" > .env
+> docker compose up -d          # 不用 --build，改环境变量不需要重新构建
+> ```
+>
+> 改完旧会话自动失效（会话签名由 `PASSWORD` 派生）。也可以直接把 compose 里
+> `- PASSWORD=${PASSWORD:-admin}` 的 `admin` 换成你的密码，但 `.env` 更干净。
+>
+> 登录框在看到默认密码时会显式提示「当前使用内置默认密码 admin」。
 
 **仓库根的 `docker-compose.yml` 全文**（就是上面命令用的那份，可以直接照抄）：
 
@@ -155,7 +168,7 @@ services:
     volumes:
       - trytv-data:/app/.data
     environment:
-      - PASSWORD=${PASSWORD:?请先在当前目录创建 .env 并写入 PASSWORD=你的站长密码}
+      - PASSWORD=${PASSWORD:-admin}   # 不设就用默认 admin，上线前请改成自己的
       - SITE_DATA_DIR=/app/.data
       # - SHORTS_PASSWORD=              # 私密短剧口令（也可在后台设，后台优先）
       # - SHORTS_SECRET=                # 短剧 cookie 签名密钥
@@ -192,7 +205,7 @@ docker compose exec trytv ls -l /app/.data
 
 | 你看到的报错 | 真正原因 | 处理 |
 | --- | --- | --- |
-| `required variable PASSWORD is missing a value` | 没有 `.env`，或 `.env` 不在 compose 同目录，或写的是 `.env.local` | 在 compose 同目录 `echo "PASSWORD=xxx" > .env` |
+| `required variable PASSWORD is missing a value` | 用的是**旧版** compose（旧版用 `${PASSWORD:?...}` 强制要求） | `git pull` 拉最新 compose；新版默认值就是 `admin`，不需要 `.env` |
 | `pull access denied for ghcr.io/try-tang/trytv` / `manifest unknown` | 镜像从没发布过（仓库无 `v*` tag） | 用上面那份 `image: trytv:local` + `--build`，或先按「发布镜像」打 tag |
 | `invalid reference format` | `docker-compose.yml` 里有全角空格/中文标点，或 YAML 缩进用了 Tab | 用空格缩进；确认 `ports:` 下是 `- "8080:8080"` 这种英文引号 |
 | `failed to solve: failed to read dockerfile` | `build:` 上下文不对（比如在别的目录执行 compose） | 保持 `build: { context: ., dockerfile: Dockerfile }`，并在仓库根执行 |
@@ -219,7 +232,7 @@ docker build -t trytv:local .
 
 docker run -d --name trytv \
   -p 8080:8080 \
-  -e PASSWORD=your-password \
+  -e PASSWORD=admin \
   -v trytv-data:/app/.data \
   --restart unless-stopped \
   trytv:local
@@ -317,7 +330,7 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `PASSWORD` | ✅ | 站长密码；用于登录后台 `/admin`。站点对外的可见范围由后台「站点设置 → 访问模式」决定，不依赖它 |
+| `PASSWORD` | | 站长密码，登录 `/admin` 用；**不设置时默认 `admin`**。站点对外可见范围由后台「站点设置 → 访问模式」决定，与它无关。公网部署请务必改掉 |
 | `PROXY_SECRET` | | 会话 / 代理签名密钥；不设置时从 `PASSWORD` 派生（多实例部署建议显式设置：`openssl rand -hex 32`） |
 | `COOKIE_SECURE` | | 覆盖会话 cookie 的 `Secure` 标记（`true` / `false`）；默认按 `x-forwarded-proto` 推导 |
 | `PORT` | | 监听端口；`next start` 用 `-p` 指定，standalone / Docker 用该变量（镜像内默认 8080） |

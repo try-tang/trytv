@@ -17,13 +17,15 @@ services:
     volumes:
       - trytv-data:/app/.data
     environment:
-      - PASSWORD=${PASSWORD:?请先在当前目录创建 .env 并写入 PASSWORD=你的站长密码}
+      # 站长密码。不设置时用内置默认值 admin（登录后到「站点设置」能看到提示）。
+      # 想用自己的密码：在 compose 同目录建 .env 写 PASSWORD=你的密码，compose 会自动读取。
+      - PASSWORD=${PASSWORD:-admin}
       - SITE_DATA_DIR=/app/.data
-      # - SHORTS_PASSWORD=
-      # - SHORTS_SECRET=
-      # - PROXY_SECRET=
-      # - COOKIE_SECURE=
-      # - DEFAULT_SOURCES=[]
+      # - SHORTS_PASSWORD=              # 私密短剧口令（也可在后台设，后台优先）
+      # - SHORTS_SECRET=                # 短剧 cookie 签名密钥
+      # - PROXY_SECRET=                 # 会话/代理签名密钥（openssl rand -hex 32）
+      # - DEFAULT_SOURCES=[{"name":"示例源","url":"https://example.com/api.php/provide/vod"}]
+      # - DEFAULT_LIVE_SOURCES=[{"name":"示例直播源","url":"https://example.com/list.m3u"}]
 
 volumes:
   trytv-data:

@@ -19,7 +19,7 @@ pnpm install --node-linker=hoisted
 
 # 2) 配置
 cp .env.example .env.local
-#   必填 PASSWORD=你的访问密码
+#   站长密码不填时默认 admin（登录 /admin 用），公网部署请改掉
 #   想开私密短剧再加 SHORTS_PASSWORD=xxx
 
 # 3) 构建 & 启动
@@ -33,7 +33,7 @@ pnpm build && pnpm start
 > node -r ./tools/next-build-shim.js node_modules/next/dist/bin/next start -p 3000
 > ```
 
-Docker 部署：仓库根的 `docker-compose.yml` 直接可用（`echo "PASSWORD=xxx" > .env && docker compose up -d --build`）。
+Docker 部署：仓库根的 `docker-compose.yml` 直接可用（`docker compose up -d --build`，默认密码 `admin`）。
 镜像三阶段构建（deps → builder → runner），业务数据挂命名卷 `trytv-data:/app/.data`；
 想让业务变量生效，把它们写进 compose 的 `environment:`（`.env` 只用于 compose 插值，不进镜像）。
 `docker compose pull` 依赖 GHCR 上已有镜像 —— 仓库没推过 `v*` tag 时镜像是空的，此时走 `--build` 或先发 tag。
@@ -68,7 +68,9 @@ Docker 部署：仓库根的 `docker-compose.yml` 直接可用（`echo "PASSWORD
 | `/api/shorts` | POST / GET | 口令换签名 cookie（httpOnly，7 天）；GET 校验后下发短剧清单。口令来源：后台「私密短剧」里的 scrypt 哈希优先，`SHORTS_PASSWORD` 兜底；入口关闭时返回 404 |
 | `/api/admin` | GET / POST | 后台：`?res=stats\|requests\|tips\|all`；action = `request.status` / `request.reply` / `request.delete` / `tip.status` / `tip.delete` / `notice.save` |
 
-后台鉴权直接复用 LibreTV 的 `PASSWORD` + HMAC 签名 cookie（`src/lib/auth.ts`、`src/lib/api-guard.ts`），没有另开一套账号体系。
+后台鉴权复用 LibreTV 的 `PASSWORD` + HMAC 签名 cookie（`src/lib/auth.ts`、`src/lib/api-guard.ts`），没有另开一套账号体系。
+
+`getPassword()` 在未设置 `PASSWORD` 时回退内置默认值 `admin`（`DEFAULT_ADMIN_PASSWORD`），`/api/status` 下发 `usingDefaultPassword` 供登录框提示；`src/middleware.ts` 与 `src/lib/users.ts` 的会话密钥派生同样用 `admin` 兜底 —— 这三处必须一致，否则登录后会被反复踢回 /login。
 
 ## 四、数据落在哪
 

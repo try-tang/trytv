@@ -12,10 +12,29 @@ import crypto from 'node:crypto';
 export const SESSION_COOKIE = 'ltv_session';
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 天
 
-export function getPassword(): string {
-  return process.env.PASSWORD || '';
+/**
+ * 开箱即用的默认站长密码。
+ *
+ * 设计取舍：项目定位是「自部署、一个人折腾」，第一次 `docker compose up` 就该能用，
+ * 不该被一个必填环境变量卡住。所以没配 `PASSWORD` 时回退到这个默认值，
+ * 而不是让整个后台 503。
+ *
+ * 安全提示：默认值写在公开仓库里，任何人拿到你的地址都能登后台改设置。
+ * 部署到公网前务必设置自己的 `PASSWORD`（后台「站点设置」里能改的只有站名口号之类，
+ * 站长密码只能走环境变量）。
+ */
+export const DEFAULT_ADMIN_PASSWORD = 'admin';
+
+/** 是否在用内置默认密码（前端据此显示「请尽快修改」提示） */
+export function isUsingDefaultPassword(): boolean {
+  return !process.env.PASSWORD;
 }
 
+export function getPassword(): string {
+  return process.env.PASSWORD || DEFAULT_ADMIN_PASSWORD;
+}
+
+/** 现在永远为 true：没配 PASSWORD 时走内置默认值 */
 export function isPasswordConfigured(): boolean {
   return getPassword().length > 0;
 }

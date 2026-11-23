@@ -264,9 +264,10 @@ const USER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
  */
 export function sessionKey(): string {
   if (process.env.PROXY_SECRET) return `${process.env.PROXY_SECRET}::user`;
+  // 与 src/lib/auth.ts 的 getPassword() 保持一致：没配 PASSWORD 时用内置默认密码
   return crypto
     .createHash('sha256')
-    .update(`${process.env.PASSWORD || ''}:libretv::user-session-salt`)
+    .update(`${process.env.PASSWORD || 'admin'}:libretv::user-session-salt`)
     .digest('hex');
 }
 

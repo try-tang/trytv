@@ -43,7 +43,7 @@ async function userSecret(): Promise<string> {
   if (process.env.PROXY_SECRET) return `${process.env.PROXY_SECRET}::user`;
   const digest = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode(`${process.env.PASSWORD ?? ''}:libretv::user-session-salt`)
+    new TextEncoder().encode(`${process.env.PASSWORD ?? 'admin'}:libretv::user-session-salt`)
   );
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))

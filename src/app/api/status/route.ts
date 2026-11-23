@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isPasswordConfigured, sessionFromCookieHeader } from '@/lib/auth';
+import { isPasswordConfigured, isUsingDefaultPassword, sessionFromCookieHeader } from '@/lib/auth';
 import { getSettings } from '@/lib/site-data';
 import { currentUserFromRequest } from '@/lib/users';
 import { getEnvSources } from '@/lib/env-sources';
@@ -29,6 +29,8 @@ export async function GET(req: Request) {
   return NextResponse.json({
     passwordRequired,
     verified,
+    // 在跑内置默认密码（PASSWORD 未设置）——前端显示「默认密码 admin，请尽快改」
+    usingDefaultPassword: isUsingDefaultPassword(),
     // 构建时由 next.config.ts 从 package.json 注入
     version: process.env.APP_VERSION || 'dev',
     // —— 访问策略 ——

@@ -128,7 +128,7 @@ function LoginInner() {
                 type="password"
                 value={adminPwd}
                 onChange={(e) => setAdminPwd(e.target.value)}
-                placeholder="站长密码（环境变量 PASSWORD）"
+                placeholder="站长密码（默认 admin）"
                 autoComplete="current-password"
                 className="input w-full"
               />

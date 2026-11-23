@@ -18,8 +18,10 @@ type SetupRequired = boolean;
 interface AuthContextValue {
   checked: boolean;
   verified: boolean;
-  /** 服务器未设置 PASSWORD，需要管理员配置 */
+  /** 服务器异常（读不到站长密码） */
   setupRequired: SetupRequired;
+  /** 正在使用内置默认密码 admin（PASSWORD 未设置） */
+  usingDefaultPassword: boolean;
   /** /api/status 返回的应用版本（构建时从 package.json 注入） */
   version: string | null;
   openLogin: () => void;
@@ -30,6 +32,7 @@ const AuthContext = createContext<AuthContextValue>({
   checked: false,
   verified: false,
   setupRequired: false,
+  usingDefaultPassword: false,
   version: null,
   openLogin: () => {},
   logout: async () => {},
@@ -43,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [checked, setChecked] = useState(false);
   const [verified, setVerified] = useState(false);
   const [setupRequired, setSetupRequired] = useState(false);
+  const [usingDefaultPassword, setUsingDefaultPassword] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const { toast } = useToast();
@@ -57,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setVerified(s.verified);
         setSetupRequired(!s.passwordRequired);
+        setUsingDefaultPassword(Boolean(s.usingDefaultPassword));
         setVersion(s.version);
         setChecked(true);
       })
@@ -115,11 +120,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [toast, queryClient]);
 
   return (
-    <AuthContext.Provider value={{ checked, verified, setupRequired, version, openLogin, logout }}>
+    <AuthContext.Provider value={{ checked, verified, setupRequired, usingDefaultPassword, version, openLogin, logout }}>
       {children}
       {modalOpen && (
         <LoginModal
           setupRequired={setupRequired}
+          usingDefault={usingDefaultPassword}
           onSuccess={handleLoginSuccess}
           onClose={() => setModalOpen(false)}
         />
@@ -130,10 +136,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 function LoginModal({
   setupRequired,
+  usingDefault,
   onSuccess,
   onClose,
 }: {
   setupRequired: boolean;
+  usingDefault: boolean;
   onSuccess: () => void;
   onClose: () => void;
 }) {
@@ -188,14 +196,19 @@ function LoginModal({
           <>
             <h2 className="text-lg font-semibold text-content mb-3">需要配置密码</h2>
             <p className="text-sm text-muted leading-relaxed">
-              为确保安全，必须设置 <code className="text-accent">PASSWORD</code> 环境变量才能使用本服务。
-              请联系管理员在部署配置中添加该变量后重启服务。
+              服务端异常，无法读取站长密码。请检查容器是否正常启动后重试。
             </p>
           </>
         ) : (
           <>
             <h2 className="text-lg font-semibold text-content mb-1">访问验证</h2>
             <p className="text-sm text-muted mb-4">请输入密码继续访问</p>
+            {usingDefault && (
+              <p className="text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg px-3 py-2 mb-3 leading-relaxed">
+                当前使用内置默认密码 <code className="font-mono">admin</code>。
+                上线前请设置 <code className="font-mono">PASSWORD</code> 环境变量换成自己的密码。
+              </p>
+            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
