@@ -1,0 +1,36 @@
+# ————————————————————————————————————————————————————————————
+# 飞牛 OS / 群晖 / 1Panel 等「面板粘贴 compose」场景专用
+#
+# 这份文件不含 build:，只用现成镜像，因为面板的 compose 编辑器
+# 只保存文本、不下载源码，写 build: context: . 会报
+#   failed to read dockerfile: open Dockerfile: no such file or directory
+#
+# 用法：面板里新建项目 → 粘贴本文件全文 → 部署
+# 镜像：ghcr.io/try-tang/trytv:latest（linux/amd64 + linux/arm64）
+# ————————————————————————————————————————————————————————————
+
+services:
+  trytv:
+    image: ghcr.io/try-tang/trytv:latest
+    container_name: trytv
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # 站长密码，登录 /admin 用。不设就是 admin
+      - PASSWORD=${PASSWORD:-admin}
+      - SITE_DATA_DIR=/app/.data
+      # - SHORTS_PASSWORD=
+      # - PROXY_SECRET=
+    volumes:
+      # 求片 / 赞赏 / 通知 / 短剧清单 / 注册用户都在这里，必须持久化
+      - trytv-data:/app/.data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  trytv-data:
