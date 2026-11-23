@@ -1,61 +1,75 @@
 'use client';
 
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
+import { ErrorState } from './states';
 
 /**
- * 局部错误边界。
+ * 区块级错误边界。
  *
- * 首页推荐位依赖豆瓣 / Bangumi 这类外部接口，抖一下就会在渲染期抛错。
- * 之前没有边界，一处出错整个首页被 error.tsx 接管（「页面出了点问题」），
- * 用户看到的是一整页报错 —— 现在只把这一个区块降级成一句提示，
- * 其余内容（搜索框、其它片单）照常可用。
+ * 为什么需要它：Next 的 error.tsx 是「路由段」粒度的，一旦触发就把整页换掉。
+ * 首页的轮播、横滑榜单都依赖豆瓣接口，接口抖动本应只影响自己那一条，
+ * 却会把整页打成「页面出了点问题」。这里把每个区块单独包起来，
+ * 崩溃只降级成该区块的一行提示，并允许单独重试。
+ *
+ * 同时把错误原文折叠显示出来（「查看原因」），
+ * 线上排查时不用再翻浏览器控制台也能知道是哪一步炸的、报的什么错。
  */
+
 interface Props {
-  /** 区块名，用于提示文案与日志定位 */
   name: string;
   children: ReactNode;
-  /** 出错时展示的紧凑占位（可选，默认一句话） */
+  /** 自定义兜底内容，传了就不显示默认提示 */
   fallback?: ReactNode;
 }
 
 interface State {
   failed: boolean;
-  /** 重试次数：用于给 children 换 key，强制重新挂载 */
+  /** 每次重试自增，作为子树 key，保证真的重建而不是复用坏掉的树 */
   attempt: number;
+  message: string;
 }
 
 export class SectionBoundary extends Component<Props, State> {
-  state: State = { failed: false, attempt: 0 };
+  state: State = { failed: false, attempt: 0, message: '' };
 
-  static getDerivedStateFromError(): Partial<State> {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown): Partial<State> {
+    const message =
+      error instanceof Error ? `${error.name}: ${error.message}` : String(error ?? '');
+    return { failed: true, message };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  componentDidCatch(error: unknown, info: { componentStack?: string | null }) {
     console.error(`[${this.props.name}] 区块渲染失败:`, error, info.componentStack);
   }
 
-  private reset = () => {
-    this.setState((prev) => ({ failed: false, attempt: prev.attempt + 1 }));
+  reset = () => {
+    this.setState((prev) => ({ failed: false, attempt: prev.attempt + 1, message: '' }));
   };
 
   render() {
-    if (this.state.failed) {
-      if (this.props.fallback !== undefined) return this.props.fallback;
-      return (
-        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-0">
-          <div className="rounded-xl border border-line bg-card px-4 py-6 text-center">
-            <p className="text-sm text-muted">「{this.props.name}」暂时没加载出来</p>
-            <button type="button" onClick={this.reset} className="btn btn-ghost btn-sm mt-3">
-              重新加载
-            </button>
-          </div>
-        </div>
-      );
+    if (!this.state.failed) {
+      return <div key={this.state.attempt}>{this.props.children}</div>;
     }
-    // 用 key 让重试真的重建子树
-    return <div key={this.state.attempt}>{this.props.children}</div>;
+    if (this.props.fallback) return <>{this.props.fallback}</>;
+
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <ErrorState
+          message={`「${this.props.name}」暂时没加载出来`}
+          onRetry={this.reset}
+          retryLabel="重新加载"
+        />
+        {this.state.message && (
+          <details className="mt-1 text-center">
+            <summary className="text-[11px] text-faint cursor-pointer hover:text-muted">
+              查看原因
+            </summary>
+            <p className="mt-1 text-[11px] text-faint break-all max-w-xl mx-auto whitespace-pre-wrap">
+              {this.state.message}
+            </p>
+          </details>
+        )}
+      </div>
+    );
   }
 }
-
-export default SectionBoundary;

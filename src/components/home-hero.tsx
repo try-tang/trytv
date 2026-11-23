@@ -19,6 +19,15 @@ import { HOME_ROWS } from '@/lib/site';
 
 const AUTO_MS = 6000;
 
+/**
+ * 豆瓣评分原样是字符串（"8.6"），但上游偶尔给 "暂无评分" / 空串 / null。
+ * 直接 Number(x).toFixed(1) 会得到 "NaN"，所以统一走这里格式化。
+ */
+function formatRating(raw?: string | null): string {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n.toFixed(1) : String(raw ?? '');
+}
+
 interface HeroSlide {
   key: string;
   type: 'movie' | 'tv';
@@ -65,7 +74,22 @@ export function HomeHero({ onPick }: { onPick: (title: string) => void }) {
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-    track.scrollTo({ left: index * track.clientWidth, behavior: 'smooth' });
+    // 兜底：某些内核/内嵌 WebView 没有 Element.scrollTo（会抛 TypeError 把整块轮播带崩），
+    // 退化为直接写 scrollLeft；smooth 不可用时也能保证位置正确。
+    const behavior = index > 0 ? 'smooth' : 'auto';
+    try {
+      if (typeof track.scrollTo === 'function') {
+        track.scrollTo({ left: index * track.clientWidth, behavior });
+        return;
+      }
+    } catch {
+      /* 落到下面的兜底 */
+    }
+    try {
+      track.scrollLeft = index * track.clientWidth;
+    } catch {
+      /* 完全不可滚动就算了，别让轮播区把页面打成错误页 */
+    }
   }, [index]);
 
   const go = useCallback((dir: -1 | 1) => {
@@ -93,9 +117,13 @@ export function HomeHero({ onPick }: { onPick: (title: string) => void }) {
       >
         {SLIDES.map((slide, i) => {
           const data = queries[i].data?.items ?? [];
-          const item: DoubanItem | undefined = data.length
-            ? data[rotation[i] % data.length]
-            : undefined;
+          // rotation[i] 来自 setRotation 的初始值 [0,0]；表面上永远有效，
+          // 但任何一次 NaN / 越界（例如热更新后 state 与 SLIDES 长度错位）
+          // 都会让 data[NaN] 变成 undefined 之后又被当成对象取属性。
+          // 这里做一次兜底取模，避免整块轮播把首页打成错误页。
+          const raw = rotation[i];
+          const slot = Number.isFinite(raw) && data.length > 0 ? Math.abs(raw) % data.length : 0;
+          const item: DoubanItem | undefined = data[slot];
           return (
             <div key={slide.key} className="min-w-full snap-center">
               <HeroCard
@@ -200,7 +228,7 @@ function HeroCard({
           <h1 className="text-xl sm:text-3xl font-bold text-content truncate">{item.title}</h1>
           <div className="mt-1.5 flex items-center gap-2 text-xs sm:text-sm text-muted">
             {item.rating && (
-              <span className="text-rating font-semibold">★ {Number(item.rating).toFixed(1)}</span>
+              <span className="text-rating font-semibold">★ {formatRating(item.rating)}</span>
             )}
             <span className="text-faint">·</span>
             <span>{item.isTv ? '剧集' : '电影'}</span>
@@ -295,7 +323,7 @@ export function HomeRowSection({
               )}
               {item.rating && (
                 <span className="absolute top-1 left-1 rounded bg-black/70 text-rating text-[11px] font-semibold px-1 py-0.5">
-                  {Number(item.rating).toFixed(1)}
+                  {formatRating(item.rating)}
                 </span>
               )}
             </div>

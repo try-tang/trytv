@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Header } from '@/components/header';
@@ -44,6 +44,9 @@ function HomeContent() {
   // 打开设置抽屉/历史面板等无关 store 变化，都不应触发首页整树重渲染
   const customAPIs = useAppStore((s) => s.customAPIs);
   const envSources = useAppStore((s) => s.envSources);
+  // 参与「源是否可用」判断的两个引用：只在它们真的换引用时才重算 activeSources
+  const subscriptions = useAppStore((s) => s.subscriptions);
+  const sourceHealth = useAppStore((s) => s.sourceHealth);
   const yellowFilter = useAppStore((s) => s.yellowFilter);
   const [input, setInput] = useState(urlQuery);
   const [detailItem, setDetailItem] = useState<SearchResultItem | null>(null);
@@ -63,19 +66,29 @@ function HomeContent() {
   };
 
   // 生效源：勾选且有地址，且满足「订阅归属/单源停用/黄色过滤」三类约束
-  const activeSources = useAppStore((s) => {
-    const all = [...s.customAPIs, ...s.envSources];
+  //
+  // 关键：选择器必须只返回「store 里现成的引用」，不能在这里 map/filter 出新数组。
+  // zustand 的选择器结果会交给 useSyncExternalStore 比较，每次都拿到一个新数组
+  // 就会被判定为「快照一直在变」→ React 报
+  // 「The result of getServerSnapshot should be cached to avoid an infinite loop」
+  // 并最终抛 Maximum update depth exceeded（整页进 error.tsx）。
+  // 所以这里只取原始字段，派生交给 useMemo。
+  const selectedKeys = useAppStore((s) => s.selectedKeys);
+  const activeSources = useMemo(() => {
+    // 两个判定函数只读这两个字段，直接传最小 state 结构即可，不必订阅整个 store
+    const stateRef = { subscriptions, sourceHealth };
+    const all = [...customAPIs, ...envSources];
     const byKey = new Map(all.map((src) => [src.key, src]));
-    return s.selectedKeys
+    return selectedKeys
       .map((k) => byKey.get(k))
       .filter((src): src is NonNullable<typeof src> => Boolean(src && validateSourceUrl(src.url)))
       .filter(
         (src) =>
-          !isInDisabledSubscription(s, src.key) &&
-          !isSourceDisabled(s, src.key) &&
-          (!s.yellowFilter || !src.isAdult)
+          !isInDisabledSubscription(stateRef, src.key) &&
+          !isSourceDisabled(stateRef, src.key) &&
+          (!yellowFilter || !src.isAdult)
       );
-  });
+  }, [selectedKeys, customAPIs, envSources, yellowFilter, subscriptions, sourceHealth]);
 
   const searchQuery = useQuery({
     queryKey: ['search', urlQuery, activeSources.map((s) => s.key).join(','), yellowFilter],

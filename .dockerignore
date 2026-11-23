@@ -1,11 +1,12 @@
 # 依赖与构建产物：镜像内由 npm ci / next build 重新生成
 node_modules
+.pnpm-store
 .next
 out
 .aider*
 tsconfig.tsbuildinfo
 
-# 版本控制与 CI
+# 版本控制与 CI（workflow 不需要进运行镜像）
 .git
 .gitignore
 .github
@@ -19,10 +20,19 @@ tsconfig.tsbuildinfo
 .data
 data
 
-# 本地临时产物
+# 本地临时产物（构建日志、验证副本、抓包脚本等，见 .gitignore 同名规则）
 _dockerbuild
 _run
+_ci
+_ci_verify
+_img
+_gitpush
+_carefree
 _*.log
+_*.txt
+_*.html
+_*.json
+_dtest*
 
 # 纯文档：不参与镜像构建
 docs
