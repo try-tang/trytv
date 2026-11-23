@@ -180,12 +180,17 @@ export default function AdminPage() {
         <main className="max-w-md mx-auto px-4 py-16">
           <EmptyState
             icon="gear"
-            title="需要先登录"
-            description="后台复用站点的访问密码（环境变量 PASSWORD），登录后即可管理求片与留言。"
+            title="需要先登录站长账号"
+            description="后台用的是站长密码（部署时设的 PASSWORD，没设置过则默认 admin），和访客账号不是一回事。"
             action={
-              <Link href="/" className="btn-primary btn-sm">
-                回首页登录
-              </Link>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Link href="/login?next=%2Fadmin&tab=admin" className="btn-primary btn-sm">
+                  输入站长密码
+                </Link>
+                <Link href="/mine" className="btn-ghost btn-sm">
+                  去「我的」登录
+                </Link>
+              </div>
             }
           />
         </main>

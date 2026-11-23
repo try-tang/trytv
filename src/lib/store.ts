@@ -367,10 +367,11 @@ export const useAppStore = create<AppState>()(
       skipMarks: {},
       // 自动跳过默认开启，但只有用户真正标记过片段才生效
       autoSkipSegments: true,
-      // 直连优先：豆瓣封面有公共镜像 + 内置代理两级兜底（见 buildImageCandidates），
-      // 默认省服务器流量；老用户保持已持久化的选择不受影响。
-      // 部署者可用 DEFAULT_IMAGE_MODE=proxy 下发内置代理优先（最稳定，吃服务器流量）
-      imageProxyMode: 'direct',
+      // 默认走内置代理：豆瓣图床国内直连经常失败、公共镜像也时好时坏，
+      // 自建的 /api/proxy 是唯一稳定的一环（失败仍会回退镜像/直连，见 buildImageCandidates）。
+      // 老用户已持久化的选择不受影响；想省服务器流量可在设置里改回「直连优先」。
+      // 部署者可用 DEFAULT_IMAGE_MODE=direct 下发直连优先。
+      imageProxyMode: 'proxy',
       imageProxyModeTouched: false,
       customImageProxy: '',
 

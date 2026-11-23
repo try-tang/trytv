@@ -11,6 +11,8 @@ import { Icon, type IconName } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
 import { SITE, FEATURES, NAV_ITEMS } from '@/lib/site';
+import { useAccess } from './access';
+import { AccessGateModal } from './access-gate-modal';
 
 /** 顶部导航：Logo、搜索框（首页外）、历史、设置 */
 export function Header({
@@ -25,6 +27,9 @@ export function Header({
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** 未登录时点设置：先弹登录/注册，登录成功后再打开设置抽屉 */
+  const [gateOpen, setGateOpen] = useState(false);
+  const access = useAccess();
   /** 移动端（<sm）折叠菜单：窄屏放不下 5 个导航项 + 3 个图标按钮 */
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -46,6 +51,22 @@ export function Header({
   const pickHistory = (text: string) => {
     setQuery(text);
     submitSearch(text);
+  };
+
+  /**
+   * 设置入口的准入判断：
+   * - 未登录（既没有本站账号也没登站长密码）→ 先弹登录/注册，登录成功再开抽屉；
+   * - 已登录 → 直接开抽屉。
+   * 这里只做前端「体验级」拦截：数据本身按账号存在浏览器里，
+   * 真正的数据隔离由登录态决定，拦的不是权限而是「没登录时改了也没处存」。
+   */
+  const openSettings = () => {
+    if (!access.ready) return;
+    if (!access.user && !access.admin) {
+      setGateOpen(true);
+      return;
+    }
+    setSettingsOpen(true);
   };
 
   return (
@@ -145,7 +166,7 @@ export function Header({
                 <Icon name="gear" />
               </Link>
             )}
-            <IconButton label="设置" onClick={() => setSettingsOpen(true)}>
+            <IconButton label="设置" onClick={openSettings}>
               <Icon name="gear" />
             </IconButton>
           </nav>
@@ -157,7 +178,7 @@ export function Header({
               label="设置"
               onClick={() => {
                 closeMenu();
-                setSettingsOpen(true);
+                openSettings();
               }}
             >
               <Icon name="gear" />
@@ -226,6 +247,15 @@ export function Header({
         )}
       </header>
 
+      <AccessGateModal
+        open={gateOpen}
+        onClose={() => setGateOpen(false)}
+        onSuccess={() => {
+          setGateOpen(false);
+          setSettingsOpen(true);
+        }}
+        reason="登录后才能保存「设置」里的偏好（源、订阅、封面加载方式等都会跟账号一起保存）"
+      />
       <SourceManagerDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </>

@@ -493,6 +493,26 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 - 门槛在 `src/middleware.ts` 统一拦（`/admin` 单独判站长 cookie），`src/lib/api-guard.ts` 的 `guardRequest()` 负责 API 侧，「读不到策略时按 open 放行」，不会因为内部请求失败把整站锁死；
 - 登录 / 注册限流：同 IP 10 次 / 10 分钟（`checkRateLimit('user:' + ip)`）。
 
+#### 页面为什么都是「按请求渲染」
+
+`src/app/*/page.tsx` 现在是**服务端组件**，只声明 `export const dynamic = 'force-dynamic'` 并渲染同目录的 `view.tsx`（真正的客户端业务）。
+
+原因：Next 的 `export const dynamic` 只对服务端组件生效。页面整个写成 `'use client'` 时该声明会被忽略，页面仍按静态预渲染，一旦命中静态缓存就不再经过 middleware —— 结果是 `login` / `members` 模式下匿名用户照样能打开首页。拆一层之后 `/`、`/rank`、`/search`、`/mine`、`/tv`、`/download`、`/shorts`、`/about`、`/live`、`/watch`、`/mine/request` 都走 `ƒ (Dynamic)`，每次请求都过一遍身份校验（构建输出里能直接看到 `ƒ /`）。
+
+### 封面图加载（图片代理）
+
+豆瓣图床在国内直连经常失败，公共镜像也时好时坏，所以**出厂默认走内置代理**：封面统一由本站 `/api/proxy?url=<原图>` 转发，服务端带 `Referer`/`UA` 去取图，取不到再回退镜像与直连（`src/lib/utils.ts` 的 `buildImageCandidates()`）。
+
+| 方式 | 行为 | 适合 |
+| --- | --- | --- |
+| `proxy`（默认） | 走本站 `/api/proxy`，最稳 | 国内服务器 / 服务器在墙外 |
+| `direct` | 浏览器直连豆瓣图床 | 客户端本来就能直连豆瓣图，想省服务器流量 |
+| `custom` | 填自己的图片代理模板（`{url}` 占位） | 有现成的图床/Worker |
+
+改法：登录后点右上角齿轮 → 「偏好设置 → 封面图加载」。**未登录点齿轮会先要求登录**（偏好跟着账号走）。部署者还可用环境变量 `DEFAULT_IMAGE_MODE` 下发默认值（仅对没手动选过的访客生效）。
+
+首页轮播大图与三排海报、观看记录、待看清单的封面都走 `SmartImage` 同一条链路，切换方式后整站一起变。
+
 数据落在 `SITE_DATA_DIR`（默认 `.data/site.json`），单文件 JSON，直接备份这个文件即可。
 
 ### 私密短剧与成人内容过滤（后台可改，不用改文件）

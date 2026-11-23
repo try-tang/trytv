@@ -7,6 +7,8 @@ import { db, removeHistory, clearAllHistory, type HistoryEntry } from '@/lib/db'
 import { Icon } from './icon';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './states';
+import { SmartImage } from './smart-image';
+import { useAppStore } from '@/lib/store';
 
 /**
  * 「我的」页的两个列表。
@@ -114,6 +116,8 @@ export function WatchHistoryList() {
 }
 
 function HistoryCard({ entry }: { entry: HistoryEntry }) {
+  const imageProxyMode = useAppStore((s) => s.imageProxyMode);
+  const customImageProxy = useAppStore((s) => s.customImageProxy);
   const percent =
     entry.duration > 0 ? Math.min(100, Math.round((entry.playbackPosition / entry.duration) * 100)) : 0;
 
@@ -127,8 +131,13 @@ function HistoryCard({ entry }: { entry: HistoryEntry }) {
       >
         <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-chip">
           {entry.pic ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={entry.pic} alt={entry.title} loading="lazy" className="w-full h-full object-cover" />
+            <SmartImage
+              url={entry.pic}
+              mode={imageProxyMode}
+              customProxy={customImageProxy}
+              alt={entry.title}
+              className="w-full h-full object-cover"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-[11px] text-faint px-1 text-center">
               {entry.title}
@@ -163,6 +172,8 @@ function HistoryCard({ entry }: { entry: HistoryEntry }) {
 
 export function WatchListPanel() {
   const [items, setItems] = useState<WatchItem[]>([]);
+  const imageProxyMode = useAppStore((s) => s.imageProxyMode);
+  const customImageProxy = useAppStore((s) => s.customImageProxy);
 
   const reload = useCallback(() => setItems(readWatchlist()), []);
 
@@ -216,8 +227,13 @@ export function WatchListPanel() {
             >
               <div className="aspect-[2/3] rounded-lg overflow-hidden bg-chip">
                 {item.pic ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.pic} alt={item.title} loading="lazy" className="w-full h-full object-cover" />
+                  <SmartImage
+                    url={item.pic}
+                    mode={imageProxyMode}
+                    customProxy={customImageProxy}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[11px] text-faint px-1 text-center">
                     {item.title}

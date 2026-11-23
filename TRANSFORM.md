@@ -165,6 +165,17 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 
 上游 LibreTV 为 AGPL-3.0，本项目同样遵循；页脚保留署名。二次分发请一并开源你的修改。
 
+## 用户体系与访问策略（第二轮补充）
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/components/access-gate-modal.tsx` | 三合一的登录/注册/站长密码弹窗（设置抽屉、我的页、服务菜单共用） |
+| `src/components/mine-account-card.tsx` | 「我的」页账号卡：登录 / 注册 / 管理员登录 / 退出 / 进入后台 |
+| `src/components/header.tsx` | 未登录点齿轮先弹登录，登录后才打开设置抽屉 |
+| `src/app/*/view.tsx` + `page.tsx` | 页面拆成「服务端壳（声明 force-dynamic）+ 客户端业务」，否则静态预渲染会绕过访问门槛 |
+| `src/lib/store.ts` | `imageProxyMode` 出厂默认改 `proxy`；设置项「封面图加载」保留三档 |
+| `src/components/home-hero.tsx` | 轮播大图与海报墙改用 `SmartImage`，跟着图片代理设置走 |
+
 ## 用户体系与访问策略（v1.0 追加）
 
 | 新增文件 | 作用 |

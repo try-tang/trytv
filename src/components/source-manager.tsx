@@ -28,6 +28,8 @@ import { exportConfig, importConfig } from '@/lib/db';
 import { PERSIST_KEY } from '@/lib/persist-storage';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from './auth';
+import { useAccess } from './access';
+import Link from 'next/link';
 import { api } from '@/lib/client-api';
 import { AUTO_REFRESH_MAX_FAIL_STREAK, syncSourceSubscription } from '@/lib/subscription-sync';
 import {
@@ -71,6 +73,7 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
 const TAB_STORAGE_KEY = 'libretv-settings-tab';
 
 export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const access = useAccess();
   const [primary, setPrimary] = useState<PrimaryTab>('sources');
   const [secondary, setSecondary] = useState<Record<PrimaryTab, SecondaryTab>>({
     sources: 'vod',
@@ -124,6 +127,26 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
       mobileFull
       subheader={
         <div className="space-y-2">
+          {/* 账号条：后台开了「登录 / 注册」时，这里能直接切换账号或去注册，
+              未登录也看得到入口——否则用户只会觉得「设置打不开」 */}
+          <div className="flex items-center gap-2 rounded-lg bg-chip px-2.5 py-1.5 text-xs">
+            <span className="text-faint shrink-0">账号</span>
+            <span className="flex-1 min-w-0 truncate text-muted">
+              {access.admin
+                ? '站长已登录'
+                : access.user
+                  ? access.user.nick || access.user.username
+                  : access.accessMode === 'open'
+                    ? '未登录（本站所有人可看）'
+                    : '未登录'}
+            </span>
+            <Link
+              href="/login"
+              className="shrink-0 rounded-md px-2 py-1 text-accent hover:bg-hover transition-colors"
+            >
+              {access.admin || access.user ? '切换' : '登录 / 注册'}
+            </Link>
+          </div>
           <TabRow tabs={PRIMARY_TABS} value={primary} onChange={setPrimary} variant="primary" ariaLabel="设置分类" />
           {/* 分组下只有一项时无需二级导航，直接展示该面板 */}
           {SECONDARY_TABS[primary].length > 1 && (

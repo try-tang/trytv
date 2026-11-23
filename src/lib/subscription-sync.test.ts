@@ -188,15 +188,15 @@ describe('applyEnvPresets · DEFAULT_RECOMMEND_SOURCE（issue #918）', () => {
 
 describe('applyEnvPresets · DEFAULT_IMAGE_MODE', () => {
   it('未配置时不改动封面图加载方式', async () => {
-    useAppStore.setState({ imageProxyMode: 'direct', imageProxyModeTouched: false });
+    useAppStore.setState({ imageProxyMode: 'proxy', imageProxyModeTouched: false });
     await applyEnvPresets(status());
-    expect(useAppStore.getState().imageProxyMode).toBe('direct');
+    expect(useAppStore.getState().imageProxyMode).toBe('proxy');
   });
 
   it('对未主动选择过的用户应用部署者默认值，且不打「已选择」标记', async () => {
-    useAppStore.setState({ imageProxyMode: 'direct', imageProxyModeTouched: false });
-    await applyEnvPresets(status({ defaultImageMode: 'proxy' }));
-    expect(useAppStore.getState().imageProxyMode).toBe('proxy');
+    useAppStore.setState({ imageProxyMode: 'proxy', imageProxyModeTouched: false });
+    await applyEnvPresets(status({ defaultImageMode: 'direct' }));
+    expect(useAppStore.getState().imageProxyMode).toBe('direct');
     // 自动预置不算用户主动选择：部署者日后调整默认值时该用户应跟随
     expect(useAppStore.getState().imageProxyModeTouched).toBe(false);
   });
@@ -214,9 +214,9 @@ describe('applyEnvPresets · DEFAULT_IMAGE_MODE', () => {
   });
 
   it('存量用户：从未打过标记但偏好已不是出厂默认值的（老版本手动改过）不被覆盖', async () => {
-    useAppStore.setState({ imageProxyMode: 'proxy', imageProxyModeTouched: false });
-    await applyEnvPresets(status({ defaultImageMode: 'direct' }));
-    expect(useAppStore.getState().imageProxyMode).toBe('proxy');
+    useAppStore.setState({ imageProxyMode: 'direct', imageProxyModeTouched: false });
+    await applyEnvPresets(status({ defaultImageMode: 'proxy' }));
+    expect(useAppStore.getState().imageProxyMode).toBe('direct');
   });
 
   it('custom 模式（需手填模板，视为明确选择）不被覆盖', async () => {
@@ -226,10 +226,10 @@ describe('applyEnvPresets · DEFAULT_IMAGE_MODE', () => {
   });
 
   it('重复调用幂等：应用一次后再调用不改变结果', async () => {
-    useAppStore.setState({ imageProxyMode: 'direct', imageProxyModeTouched: false });
-    await applyEnvPresets(status({ defaultImageMode: 'proxy' }));
-    await applyEnvPresets(status({ defaultImageMode: 'proxy' }));
-    expect(useAppStore.getState().imageProxyMode).toBe('proxy');
+    useAppStore.setState({ imageProxyMode: 'proxy', imageProxyModeTouched: false });
+    await applyEnvPresets(status({ defaultImageMode: 'direct' }));
+    await applyEnvPresets(status({ defaultImageMode: 'direct' }));
+    expect(useAppStore.getState().imageProxyMode).toBe('direct');
     expect(useAppStore.getState().imageProxyModeTouched).toBe(false);
   });
 });

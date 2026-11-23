@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/icon';
 import { useAccess } from '@/components/access';
 import { SITE } from '@/lib/site';
@@ -21,12 +21,19 @@ import { cn } from '@/lib/utils';
 
 type Mode = 'login' | 'register' | 'admin';
 
-function LoginInner() {
+function readParam(name: string): string | null {
+  // 不用 useSearchParams：它会把整棵树推进 Suspense 降级，服务端渲染出来是空壳，
+  // 未登录用户首屏看不到页签和表单。window 只在浏览器端存在，SSR 时返回 null。
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+export default function LoginPage() {
   const router = useRouter();
-  const params = useSearchParams();
-  const next = params.get('next') || '/';
+  const [next, setNext] = useState('/');
   const { accessMode, allowRegister, user, admin, loginUser, registerUser, ready } = useAccess();
 
+  // ?tab=admin 直接落在站长页签（后台「需要先登录」按钮带过来）
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -34,6 +41,14 @@ function LoginInner() {
   const [adminPwd, setAdminPwd] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // 首帧后再读 URL 参数，避免 SSR 与客户端首次渲染不一致
+  useEffect(() => {
+    setNext(readParam('next') || '/');
+    const tab = readParam('tab');
+    if (tab === 'admin') setMode('admin');
+    else if (tab === 'register') setMode('register');
+  }, []);
 
   // 已是登录态（或整站不需要登录）就直接回目标页
   useEffect(() => {
@@ -78,7 +93,7 @@ function LoginInner() {
   const tabs: { key: Mode; label: string; show: boolean }[] = [
     { key: 'login', label: '账号登录', show: true },
     { key: 'register', label: '注册', show: allowRegister },
-    { key: 'admin', label: '站长', show: true },
+    { key: 'admin', label: '站长密码', show: true },
   ];
 
   return (
@@ -191,10 +206,4 @@ function LoginInner() {
   );
 }
 
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="min-h-[100dvh]" />}>
-      <LoginInner />
-    </Suspense>
-  );
-}
+

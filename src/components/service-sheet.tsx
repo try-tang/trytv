@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { FEATURES, SITE } from '@/lib/site';
 import { useToast } from './toast';
 import { useAccess } from './access';
+import { AccessGateModal } from './access-gate-modal';
 import { useNoticePopup, requestApi, tipApi } from '@/lib/site-client';
 import type { TipEntry } from '@/lib/site-data';
 import { useFocusTrap } from './use-focus-trap';
@@ -18,10 +19,10 @@ import { Icon } from './icon';
  * 只挂载在「我的」页：首页与搜索页不再显示这块（站长要求服务区收进我的）。
  */
 export function ServiceSheet() {
-  const [sheet, setSheet] = useState<null | 'request' | 'tip' | 'tipwall' | 'notice'>(null);
+  const [sheet, setSheet] = useState<null | 'request' | 'tip' | 'tipwall' | 'notice' | 'admin'>(null);
   const { toast } = useToast();
   const noticePopup = useNoticePopup();
-  const { shortsEnabled } = useAccess();
+  const { shortsEnabled, admin, user } = useAccess();
 
   const items: { key: string; icon: string; label: string; note?: string; href?: string; onClick?: () => void }[] = [];
 
@@ -52,7 +53,18 @@ export function ServiceSheet() {
     items.push({ key: 'tv', icon: '📺', label: '打开电视版', href: '/tv' });
   }
   if (FEATURES.admin) {
-    items.push({ key: 'admin', icon: '⚙', label: '管理员后台', href: '/admin' });
+    // 未登录站长密码时先进登录弹窗，登完再跳后台；已登录直接进
+    if (admin) {
+      items.push({ key: 'admin', icon: '⚙', label: '管理员后台', note: '已登录', href: '/admin' });
+    } else {
+      items.push({
+        key: 'admin',
+        icon: '⚙',
+        label: '管理员登录',
+        note: user ? '需要站长密码' : '输入站长密码',
+        onClick: () => setSheet('admin'),
+      });
+    }
   }
 
   return (
@@ -97,6 +109,15 @@ export function ServiceSheet() {
       <RequestModal open={sheet === 'request'} onClose={() => setSheet(null)} onDone={() => toast('求片已提交，留意站长处理进度', 'success')} />
       <TipModal open={sheet === 'tip'} onClose={() => setSheet(null)} onDone={() => toast('留言已提交，站长核对后上墙', 'success')} />
       <TipWallModal open={sheet === 'tipwall'} onClose={() => setSheet(null)} onTip={() => setSheet('tip')} />
+      <AccessGateModal
+        open={sheet === 'admin'}
+        onClose={() => setSheet(null)}
+        defaultMode="admin"
+        reason="站长密码是部署时设置的 PASSWORD（没设置时默认 admin），与前台访客账号不是一回事"
+        onSuccess={() => {
+          toast('站长已登录，可以进后台了', 'success');
+        }}
+      />
       <NoticeModal
         open={sheet === 'notice' || noticePopup.open}
         onClose={() => {

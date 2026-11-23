@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/lib/client-api';
+import { useAppStore } from '@/lib/store';
 import type { DoubanItem } from '@/lib/types';
 import { Icon } from './icon';
+import { SmartImage } from './smart-image';
 import { cn } from '@/lib/utils';
 import { HOME_ROWS } from '@/lib/site';
 
@@ -184,6 +186,9 @@ function HeroCard({
   label: string;
   onPick: (title: string) => void;
 }) {
+  // 封面加载方式来自设置里的「封面图加载」：direct / proxy / custom 都要走 этой 组件
+  const imageProxyMode = useAppStore((s) => s.imageProxyMode);
+  const customImageProxy = useAppStore((s) => s.customImageProxy);
   if (loading) {
     return (
       <div className="relative w-full aspect-[21/9] sm:aspect-[24/9] max-h-[420px] bg-card animate-pulse" />
@@ -199,14 +204,17 @@ function HeroCard({
 
   return (
     <div className="relative w-full aspect-[21/9] sm:aspect-[24/9] max-h-[420px] overflow-hidden bg-[#0e0e12]">
-      {/* 背景图：原站用同图做底并压暗，没有图时退回纯色 */}
+      {/* 背景图：原站用同图做底并压暗，没有图时退回纯色。
+          必须走 SmartImage：它会按「封面图加载」设置拼代理地址并做降级链，
+          裸 <img src={item.cover}> 会绕过代理，豆瓣图床直连被墙时整片黑。 */}
       {item.cover && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={item.cover}
+        <SmartImage
+          url={item.cover}
+          mode={imageProxyMode}
+          customProxy={customImageProxy}
           alt=""
-          aria-hidden
           className="absolute inset-0 w-full h-full object-cover scale-105 blur-[2px] opacity-45"
+          loading="eager"
         />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-page via-page/55 to-transparent" />
@@ -214,11 +222,13 @@ function HeroCard({
 
       <div className="relative h-full max-w-6xl mx-auto px-4 sm:px-8 flex items-end pb-10 sm:pb-12 gap-4">
         {item.cover && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.cover}
+          <SmartImage
+            url={item.cover}
+            mode={imageProxyMode}
+            customProxy={customImageProxy}
             alt={item.title}
             className="hidden sm:block w-[92px] h-[132px] object-cover rounded-lg shadow-lg shadow-black/50 shrink-0"
+            loading="eager"
           />
         )}
         <div className="min-w-0">
@@ -273,6 +283,9 @@ export function HomeRowSection({
     retry: false,
   });
   const items = query.data?.items ?? [];
+  // 与详情弹窗 / 历史面板一致：海报墙也按「封面图加载」设置走代理 + 降级链
+  const imageProxyMode = useAppStore((s) => s.imageProxyMode);
+  const customImageProxy = useAppStore((s) => s.customImageProxy);
 
   return (
     <section className="mt-7">
@@ -309,11 +322,11 @@ export function HomeRowSection({
           >
             <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-chip">
               {item.cover ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.cover}
+                <SmartImage
+                  url={item.cover}
+                  mode={imageProxyMode}
+                  customProxy={customImageProxy}
                   alt={item.title}
-                  loading="lazy"
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
                 />
               ) : (
