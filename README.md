@@ -243,6 +243,62 @@ docker run -d --name trytv \
 > 镜像为 `node:22-alpine` 三阶段构建（deps → builder → runner），运行阶段只带 Next 的 `standalone` 产物，非 root 运行。
 > `DOCKER_BUILD=1` 让 `next.config.ts` 输出 standalone；**构建期不要传真实 `PASSWORD`**，它会经 `next.config.ts` 的 `env` 被内联进产物。
 
+### 飞牛 OS / 群晖 / 1Panel 等「面板粘贴 compose」场景
+
+**这类面板的 compose 编辑器只保存文本，不会下载源码。** 因此在里面粘贴带 `build:` 的 compose 一定会失败：
+
+```
+failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory
+```
+
+面板工作目录里没有 `Dockerfile`，`build: context: .` 找不到东西可编。
+
+正确做法是用**现成镜像**，仓库里专门备了这份 `docker-compose.image.yml`（粘贴到面板的 compose 输入框即可）：
+
+```yaml
+services:
+  trytv:
+    image: ghcr.io/try-tang/trytv:latest
+    container_name: trytv
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PASSWORD=${PASSWORD:-admin}
+      - SITE_DATA_DIR=/app/.data
+    volumes:
+      - trytv-data:/app/.data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  trytv-data:
+```
+
+镜像 `ghcr.io/try-tang/trytv:latest` 已发布，含 `linux/amd64` 与 `linux/arm64` 双架构（ARM 设备如瑞芯微、树莓派直接用）。
+
+**国内拉不动 ghcr.io 时**，在面板里把镜像地址前面加加速前缀。飞牛可在「Docker → 设置 → Registry 镜像」里配，或用下面任一可用的写法：
+
+```yaml
+# 写法 A：用镜像加速站（把前缀换成你实际可用的）
+image: ghcr.nju.edu.cn/try-tang/trytv:latest      # 南京大学镜像站
+image: ghcr.m.daocloud.io/try-tang/trytv:latest   # DaoCloud
+
+# 写法 B：先在能上网的机器上导出镜像，再导入
+docker pull ghcr.io/try-tang/trytv:latest
+docker save ghcr.io/try-tang/trytv:latest -o trytv.tar
+# 传到 NAS 后
+docker load -i trytv.tar
+```
+
+> 加速站是第三方服务，可用性会变；拉不动就试下一个，或者用写法 B 离线导入最稳。
+
+**部署后**：浏览器开 `http://NAS的IP:8080` → 右上角齿轮 → 密码 `admin` → 「站点设置」改访问模式与站名，公网使用前务必把 `PASSWORD` 换成自己的。
+
 ### 免 Docker 运行（自己从源码打 standalone 包）
 
 不想装 Docker、又不想让 `npm install` 在服务器上跑一遍，可以本地打一个独立产物再拷过去：
