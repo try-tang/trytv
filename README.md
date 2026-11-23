@@ -91,12 +91,12 @@ trytv（看看电视）是一款开源的自托管影视聚合站：多采集站
 ## 快速开始
 
 ```bash
-pnpm install --node-linker=hoisted
+npm install
 cp .env.example .env.local        # 至少填 PASSWORD=你的访问密码
-pnpm build && pnpm start          # http://localhost:8080
+npm run build && npm start          # http://localhost:8080
 ```
 
-> **为什么必须 `--node-linker=hoisted`**：pnpm 默认 isolated 链接下 Next.js 找不到 `styled-jsx` / `@swc/helpers` / `caniuse-lite`，构建会直接失败。
+> 仓库只用 npm（`package-lock.json`），Dockerfile / CI / 文档三处一致。
 
 受限环境（构建时报 `Error: spawn EPERM`，多见于禁用匿名管道的沙箱）改用仓库自带的 shim：
 
@@ -107,118 +107,128 @@ node -r ./tools/next-build-shim.js node_modules/next/dist/bin/next start -p 8080
 
 ## 部署
 
-### Docker Compose（推荐，一条命令）
+### Docker Compose（推荐：复制下面这段，一条命令跑起来）
 
-仓库根目录的 `docker-compose.yml` 直接可用，不需要改任何一行：
+**1）拿到代码**
 
 ```bash
 git clone https://github.com/try-tang/trytv.git && cd trytv
-
-# 只需一个密码文件
-echo "PASSWORD=your-password" > .env
-
-docker compose up -d --build      # 本地构建并启动
-docker compose logs -f            # 看启动日志
 ```
 
-打开 `http://服务器IP:8080`，用 `.env` 里的 `PASSWORD` 进入站长后台，再到「站点设置」里配访问模式（所有人可看 / 登录后可看 / 仅注册用户）、是否开放注册、站名与口号。
-
-> **数据落在命名卷 `trytv_trytv-data` 里挂到 `/app/.data`**（求片、赞赏留言、站长通知、短剧清单、注册用户）。
-> 用命名卷而不是 `./data` 绑定挂载，是因为容器以非 root（uid 1000）运行，绑定宿主机目录经常因属主不符报 `EACCES`。
-> 备份 / 恢复：
->
-> ```bash
-> docker run --rm -v trytv_trytv-data:/d -v "$PWD":/b alpine tar czf /b/trytv-data.tar.gz -C /d .
-> docker run --rm -v trytv_trytv-data:/d -v "$PWD":/b alpine sh -c 'cd /d && tar xzf /b/trytv-data.tar.gz'
-> ```
->
-> 想直接用宿主机目录也很简单：把 compose 里的 `- trytv-data:/app/.data` 换成 `- ./data:/app/.data`，并执行 `sudo chown -R 1000:1000 ./data`。
-
-**从已发布镜像部署（零构建）**：先给仓库打 tag `v1.0.0` 触发 `.github/workflows/docker-publish.yml`，镜像推好后：
+**2）在同目录建一个 `.env`（只放密码，必须）**
 
 ```bash
-docker compose pull && docker compose up -d
+echo "PASSWORD=你的站长密码" > .env
 ```
 
-> 镜像地址 `ghcr.io/try-tang/trytv`（`<tag>` / `latest` 两套标签，`linux/amd64` + `linux/arm64` 双架构）。
-> 仓库是 public，拉取无需登录；仓库若改回 private，需先 `echo $GITHUB_TOKEN | docker login ghcr.io -u <用户名> --password-stdin`。
-> 固定版本写进 `.env`：`TRYTV_IMAGE=ghcr.io/try-tang/trytv:1.0.0`。
+> 文件名必须是 `.env`（不是 `.env.local`，也不是 `env`），且在 `docker-compose.yml` **同一目录**。
+> `PASSWORD` 缺失时 compose 会在启动前直接报 `required variable PASSWORD is missing a value` 并退出 —— 这是故意做的保护。
 
-**直接用 `docker run`**（不想用 compose 时）：
-
-```bash
-docker run -d --name trytv \
-  -p 8080:8080 \
-  -e PASSWORD=your-password \
-  -e SHORTS_PASSWORD=shorts-password \
-  -v trytv-data:/app/.data \
-  --restart unless-stopped \
-  ghcr.io/try-tang/trytv:latest
-```
-
-> ⚠️ **`-v ...:/app/.data` 不要省**：业务数据都在那里，不挂卷重建容器就全丢。
-
-#### Docker 常见报错
-
-| 报错 | 原因 | 处理 |
-| --- | --- | --- |
-| `invalid reference format` / `Error while fetching server API version` | 没装 Docker 或守护进程没起 | 先 `docker info` 确认能连上引擎；Linux 上 `sudo systemctl start docker`，并确认当前用户在 `docker` 组 |
-| `required variable PASSWORD is missing a value` | 没建 `.env` | 在**与 `docker-compose.yml` 同一目录**下 `echo "PASSWORD=xxx" > .env`，或在 `environment:` 里直接写死 |
-| `pull access denied for ghcr.io/try-tang/trytv` | 镜像还没发布（尚未打过 `v*` tag） | 用源码构建：`docker compose up -d --build` |
-| `npm ci` 阶段报 `lock file ... not in sync` | `package-lock.json` 与 `package.json` 漂移 | Dockerfile 已内置兜底（自动退回 `npm install`），但建议本地 `npm install --package-lock-only` 后重新提交 |
-| 页面能开但求片/注册报 500，日志出现 `EACCES` / `EPERM` | 挂载目录属主与容器内 uid 1000 不符 | 用命名卷（默认已如此），或 `sudo chown -R 1000:1000 ./data` |
-| 容器起来就退出 | 端口占用或 `server.js` 缺失 | `docker compose logs trytv` 看第一行错误；端口冲突改 `ports: - "8090:8080"` |
-| 健康状态 `unhealthy` | `/api/status` 访问不到 | 多为 `PASSWORD` 未设或端口映射写错；`docker compose exec trytv wget -qO- http://127.0.0.1:8080/api/status` 自测 |
-
-#### 构建镜像的两种方式
+**3）启动**
 
 ```bash
-# 方式 A：compose 构建（推荐，会同时打好 ghcr.io/try-tang/trytv:latest 标签）
 docker compose up -d --build
-
-# 方式 B：纯 docker build
-docker build -t trytv:local .
-docker run -d -p 8080:8080 -e PASSWORD=your-password -v trytv-data:/app/.data trytv:local
+docker compose logs -f        # Ctrl+C 退出日志，不影响容器
 ```
 
-> 镜像用 `node:22-alpine` 三阶段构建（deps → builder → runner），运行阶段只带 `standalone` 产物，非 root 运行。
-> `DOCKER_BUILD=1` 会让 `next.config.ts` 输出 `standalone`；构建期不要把真实 `PASSWORD` 塞进 build-args，否则会被内联进产物。
+打开 `http://服务器IP:8080`，右上角齿轮 → 用 `PASSWORD` 登录站长后台 → 「站点设置」里配访问模式（所有人可看 / 登录后可看 / 仅注册用户）、是否开放注册、站名与口号。
 
-### 最小 compose（自己写一份时参考）
+**仓库根的 `docker-compose.yml` 全文**（就是上面命令用的那份，可以直接照抄）：
 
 ```yaml
 services:
   trytv:
-    image: ${TRYTV_IMAGE:-ghcr.io/try-tang/trytv:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: trytv:local
     container_name: trytv
     restart: unless-stopped
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     volumes:
-      - trytv-data:/app/.data          # 业务数据持久化，必挂
+      - trytv-data:/app/.data
     environment:
-      - PASSWORD=change-me             # 必填：站长密码
+      - PASSWORD=${PASSWORD:?请先在当前目录创建 .env 并写入 PASSWORD=你的站长密码}
       - SITE_DATA_DIR=/app/.data
-      # - SHORTS_PASSWORD=change-me-too      # 私密短剧口令
-      # - PROXY_SECRET=your-secret           # 会话/代理签名密钥，多实例部署建议设置
+      # - SHORTS_PASSWORD=              # 私密短剧口令（也可在后台设，后台优先）
+      # - SHORTS_SECRET=                # 短剧 cookie 签名密钥
+      # - PROXY_SECRET=                 # 会话/代理签名密钥（openssl rand -hex 32）
       # - DEFAULT_SOURCES=[{"name":"示例源","url":"https://example.com/api.php/provide/vod"}]
       # - DEFAULT_LIVE_SOURCES=[{"name":"示例直播源","url":"https://example.com/list.m3u"}]
-      # - DEFAULT_SUBSCRIPTIONS=["https://example.com/sources.json"]
-      # - DEFAULT_RECOMMEND_SOURCE=douban    # 首页推荐数据源（douban/bangumi/hot-list）
-      # - LIVE_ALLOW_PRIVATE=1               # 自建内网 IPTV 源时开启
 
 volumes:
   trytv-data:
 ```
 
+> **为什么 `image` 写 `trytv:local` 而不是 `ghcr.io/...`？**
+> 仓库**还没有发布任何镜像**（没打过 `v*` tag，GHCR 上是空的）。写 `ghcr.io/try-tang/trytv:latest` 时，`docker compose up` 会先尝试去拉一个不存在的镜像，直接报 `pull access denied` / `manifest unknown`，看起来就像「构建失败」。
+> `trytv:local` 是本地构建产物名，`--build` 现场编、不联网拉，永远能成。
+> 想改成「拉现成镜像」的先决条件见下面的「发布镜像」一节。
+
+**数据在哪 / 怎么备份**
+
+业务数据（求片、赞赏留言、站长通知、短剧清单、注册用户）落在命名卷 `trytv_trytv-data`，挂到容器 `/app/.data`。
+
 ```bash
-docker compose up -d --build    # 源码构建（仓库自带 compose 就是这个形态）
-docker compose logs -f          # 看启动日志
-docker compose down             # 停止，命名卷保留
-docker compose down -v          # 停止并连数据一起删除（谨慎）
+# 备份
+docker run --rm -v trytv_trytv-data:/d -v "$PWD":/b alpine tar czf /b/trytv-data.tar.gz -C /d .
+# 恢复
+docker run --rm -v trytv_trytv-data:/d -v "$PWD":/b alpine sh -c 'cd /d && tar xzf /b/trytv-data.tar.gz'
+# 看一眼里面有什么
+docker compose exec trytv ls -l /app/.data
 ```
 
-其余可选变量见 [环境变量](#环境变量)。
+为什么用命名卷而不是 `./data`：容器内以非 root（uid 1000）运行，绑定挂载宿主机目录时属主往往对不上，写 `site.json` 会 `EACCES`。
+真要用宿主机目录：把 `- trytv-data:/app/.data` 换成 `- ./data:/app/.data`，然后 `sudo chown -R 1000:1000 ./data`。
+
+#### 构建失败？先按这张表对号入座
+
+| 你看到的报错 | 真正原因 | 处理 |
+| --- | --- | --- |
+| `required variable PASSWORD is missing a value` | 没有 `.env`，或 `.env` 不在 compose 同目录，或写的是 `.env.local` | 在 compose 同目录 `echo "PASSWORD=xxx" > .env` |
+| `pull access denied for ghcr.io/try-tang/trytv` / `manifest unknown` | 镜像从没发布过（仓库无 `v*` tag） | 用上面那份 `image: trytv:local` + `--build`，或先按「发布镜像」打 tag |
+| `invalid reference format` | `docker-compose.yml` 里有全角空格/中文标点，或 YAML 缩进用了 Tab | 用空格缩进；确认 `ports:` 下是 `- "8080:8080"` 这种英文引号 |
+| `failed to solve: failed to read dockerfile` | `build:` 上下文不对（比如在别的目录执行 compose） | 保持 `build: { context: ., dockerfile: Dockerfile }`，并在仓库根执行 |
+| `npm ci ... lock file ... not in sync` | `package-lock.json` 与 `package.json` 漂移 | Dockerfile 已内置兜底（自动退回 `npm install`）；根治是本地 `npm install --package-lock-only` 后提交 |
+| `EACCES` / `EPERM`（页面能开，但求片/注册 500） | `.data` 属主与容器 uid 1000 不符 | 默认命名卷不会有这问题；若改绑定挂载：`sudo chown -R 1000:1000 ./data` |
+| 容器起来就退出（`docker compose ps` 显示 Exit） | 端口被占，或 `server.js` 没进镜像 | `docker compose logs trytv` 看首行；端口冲突改 `- "8090:8080"` |
+| 健康检查 `unhealthy` | `/api/status` 打不通 | `docker compose exec trytv wget -qO- http://127.0.0.1:8080/api/status` 自测 |
+| 拉基础镜像超时（国内网络） | Docker Hub 连不上 | 配镜像加速：`/etc/docker/daemon.json` 加 `{"registry-mirrors":["https://docker.m.daocloud.io"]}` 后 `systemctl restart docker` |
+
+#### 发布镜像（可选，想「零构建」部署才需要）
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+`.github/workflows/docker-publish.yml` 会构建 `linux/amd64` + `linux/arm64` 并推到 `ghcr.io/try-tang/trytv:1.0.0` 与 `:latest`。
+推好后把 compose 里的 `image: trytv:local` 改成 `image: ghcr.io/try-tang/trytv:latest`（或 `.env` 里写 `TRYTV_IMAGE=ghcr.io/try-tang/trytv:1.0.0`），再 `docker compose pull && docker compose up -d`。
+仓库是 public，拉取不用登录。
+
+#### 不用 compose，直接 docker run
+
+```bash
+docker build -t trytv:local .
+
+docker run -d --name trytv \
+  -p 8080:8080 \
+  -e PASSWORD=your-password \
+  -v trytv-data:/app/.data \
+  --restart unless-stopped \
+  trytv:local
+```
+
+> `-v ...:/app/.data` 不要省：业务数据都在那儿，不挂卷重建容器就全丢。
+
+> 镜像为 `node:22-alpine` 三阶段构建（deps → builder → runner），运行阶段只带 Next 的 `standalone` 产物，非 root 运行。
+> `DOCKER_BUILD=1` 让 `next.config.ts` 输出 standalone；**构建期不要传真实 `PASSWORD`**，它会经 `next.config.ts` 的 `env` 被内联进产物。
 
 ### 免 Docker 运行（自己从源码打 standalone 包）
 
@@ -254,18 +264,13 @@ $env:PASSWORD="your-password"; $env:PORT="8080"; node server.js
 需要 **Node.js 22**（`Dockerfile` 与 CI 都是 22；18/20 未验证）。
 
 ```bash
-# 方式一：npm（与 Dockerfile 一致，锁文件是 package-lock.json）
-npm ci
-PASSWORD=your-password npm run build
+npm ci                 # 严格按 package-lock.json 装（仓库只有这一个锁文件）
+npm run build
 PASSWORD=your-password npm start        # 监听 8080
-
-# 方式二：pnpm（与 CI 一致，注意 node-linker）
-pnpm install --node-linker=hoisted
-PASSWORD=your-password pnpm build
-PASSWORD=your-password pnpm start
 ```
 
-> **为什么必须 `--node-linker=hoisted`**：pnpm 默认 isolated 软链接下 Next 找不到 `styled-jsx` / `@swc/helpers` / `caniuse-lite`，构建会直接失败。
+> 仓库只保留 `package-lock.json`（npm）。Dockerfile、CI、文档三处统一走 npm，避免两份锁文件漂移。
+> `npm ci` 若报 `lock file ... not in sync`，说明 `package.json` 被改过却没更新锁文件：本地执行 `npm install --package-lock-only` 后提交。
 
 Windows PowerShell：
 
@@ -523,13 +528,13 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 ## 开发
 
 ```bash
-pnpm install --node-linker=hoisted
-PASSWORD=dev-password pnpm dev      # http://localhost:8080，改代码热更新
+npm install
+PASSWORD=dev-password npm run dev      # http://localhost:8080，改代码热更新
 
-pnpm typecheck                      # tsc --noEmit
-pnpm lint                           # eslint src
-pnpm test                           # vitest，核心库单测（cms-parser / m3u8 / ssrf / store / auth ...）
-pnpm build                          # 生产构建
+npm run typecheck                      # tsc --noEmit
+npm run lint                           # eslint src
+npm run test                           # vitest，核心库单测（cms-parser / m3u8 / ssrf / store / auth ...）
+npm run build                          # 生产构建
 ```
 
 目录速览：
@@ -560,7 +565,7 @@ git push && git push --tags
 
 | workflow | 触发 | 作用 |
 | --- | --- | --- |
-| `.github/workflows/ci.yml` | push / PR 到 `main` | `pnpm install --node-linker=hoisted --frozen-lockfile` → `tsc --noEmit` → `eslint` → `next build` |
+| `.github/workflows/ci.yml` | push / PR 到 `main` | `npm ci` → `npm run typecheck` → `npm run lint` → `npm run build` |
 | `.github/workflows/docker-publish.yml` | 推 `v*` tag 或手动 | amd64 / arm64 分别 buildx 构建推 `ghcr.io/try-tang/trytv`，再合并成多架构 manifest 并补 `latest` |
 
 两个 workflow 都只用内置 `GITHUB_TOKEN`，不需要配置任何 secrets。

@@ -2,9 +2,9 @@ name: ci
 
 # 每次 push / PR 到 main 都跑：类型检查 + ESLint + 构建。
 #
-# 为什么保留这一层：改造过程中最容易出的问题是「页面能编译、运行时炸」——
-# 比如在 map 回调里调 Hook（rules-of-hooks）、API 签名写错（TS 能查到）、
-# 或者新页面漏了 Suspense 包 useSearchParams。这三类都在下面三步里拦住。
+# 用 npm 而不是 pnpm：仓库只保留 package-lock.json，Dockerfile 也用 npm ci，
+# 三处（本地 / Docker / CI）走同一套依赖解析，避免两份锁文件漂移导致
+# 「本地能跑、镜像构建失败」这类问题。
 
 on:
   pull_request:
@@ -27,28 +27,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
 
-      # 必须 hoisted：pnpm 默认 isolated 链接下 next 找不到
-      # styled-jsx / @swc/helpers / caniuse-lite，构建会直接失败
       - name: install
-        run: pnpm install --node-linker=hoisted --frozen-lockfile
+        run: npm ci --no-audit --no-fund
 
       - name: typecheck
-        run: pnpm exec tsc --noEmit
+        run: npm run typecheck
 
       - name: lint
-        run: pnpm lint
+        run: npm run lint
 
       - name: build
-        run: pnpm build
+        run: npm run build
         env:
           # 构建期没有真实密码也不会失败，但显式给一个避免 503 分支干扰日志
           PASSWORD: ci-build-password
