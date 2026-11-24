@@ -55,18 +55,20 @@ export function Header({
 
   /**
    * 设置入口的准入判断：
-   * - 未登录（既没有本站账号也没登站长密码）→ 先弹登录/注册，登录成功再开抽屉；
+   * - 站点开了「登录后可看 / 仅注册用户」→ 没登录过门槛就先要求登录；
+   * - 站点是「所有人可看」但用户也没登录 → 让他在弹窗里自己选「登录 / 注册」
+   *   （对应原站「点设置先选登录还是注册」的流程），或直接「先不登录，继续」；
    * - 已登录 → 直接开抽屉。
    * 这里只做前端「体验级」拦截：数据本身按账号存在浏览器里，
    * 真正的数据隔离由登录态决定，拦的不是权限而是「没登录时改了也没处存」。
    */
   const openSettings = () => {
     if (!access.ready) return;
-    if (!access.user && !access.admin) {
-      setGateOpen(true);
+    if (access.user || access.admin) {
+      setSettingsOpen(true);
       return;
     }
-    setSettingsOpen(true);
+    setGateOpen(true);
   };
 
   return (
@@ -156,16 +158,8 @@ export function Header({
             <IconButton label="下载管理" onClick={requestShowDownloadManager}>
               <Icon name="download" />
             </IconButton>
-            {FEATURES.admin && (
-              <Link
-                href="/admin"
-                className="p-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
-                title="管理员后台"
-                aria-label="管理员后台"
-              >
-                <Icon name="gear" />
-              </Link>
-            )}
+            {/* 只留一枚齿轮：后台入口收到设置抽屉的「站点与账号」页和「我的」页账号卡，
+                两枚一模一样的齿轮图标并排，用户分不清哪个是哪个 */}
             <IconButton label="设置" onClick={openSettings}>
               <Icon name="gear" />
             </IconButton>
@@ -238,6 +232,11 @@ export function Header({
               >
                 下载管理
               </MenuAction>
+              {FEATURES.admin && access.admin && (
+                <MenuRow href="/admin" active={pathname.startsWith('/admin')} icon="gear" onNavigate={closeMenu}>
+                  管理后台
+                </MenuRow>
+              )}
             </div>
             <div className="mt-1.5 flex items-center justify-between rounded-lg bg-chip px-3 py-2">
               <span className="text-xs text-muted">外观主题</span>
@@ -254,7 +253,20 @@ export function Header({
           setGateOpen(false);
           setSettingsOpen(true);
         }}
-        reason="登录后才能保存「设置」里的偏好（源、订阅、封面加载方式等都会跟账号一起保存）"
+        // 「所有人可看」时登录不是硬性要求，给一个继续的出口，否则会被挡住
+        onSkip={
+          access.accessMode === 'open' && !access.admin
+            ? () => {
+                setGateOpen(false);
+                setSettingsOpen(true);
+              }
+            : undefined
+        }
+        reason={
+          access.accessMode === 'open'
+            ? '登录后设置里的偏好（源、订阅、封面加载方式）会跟着账号保存；不登录也能改，只是换设备要重设。'
+            : '本站需要登录才能浏览，先登录再打开设置。'
+        }
       />
       <SourceManagerDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />

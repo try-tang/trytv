@@ -29,6 +29,7 @@ export function AccessGateModal({
   onSuccess,
   reason,
   defaultMode = 'user',
+  onSkip,
 }: {
   open: boolean;
   onClose: () => void;
@@ -36,6 +37,11 @@ export function AccessGateModal({
   onSuccess?: () => void;
   reason?: string;
   defaultMode?: Mode;
+  /**
+   * 「先不登录，继续」——只有站点是「所有人可看」这种不拦人的模式才给这个出口，
+   * 否则访客会被自己的弹窗锁在门外（设置只是偏好，不是权限）。
+   */
+  onSkip?: () => void;
 }) {
   const { accessMode, allowRegister, admin, user, loginUser, registerUser, refresh } = useAccess();
   const { toast } = useToast();
@@ -213,6 +219,16 @@ export function AccessGateModal({
               {busy ? '处理中…' : mode === 'admin' ? '站长登录' : mode === 'register' ? '注册并登录' : '登录'}
             </button>
           </form>
+
+          {onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="w-full text-center text-xs text-faint hover:text-content transition-colors py-1"
+            >
+              先不登录，继续
+            </button>
+          )}
 
           <p className="text-[11px] text-faint leading-relaxed">
             {accessMode === 'open'

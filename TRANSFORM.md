@@ -192,3 +192,16 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 - 设置项落在 `.data/site.json` 的 `settings`：`accessMode`（`open` / `login` / `members`）、`allowRegister`、`siteName`、`slogan`、`banner`。
 - 后台 `/api/admin` 新增 `?res=users|settings` 与 `settings.save` / `user.create` / `user.disable` / `user.enable` / `user.password` / `user.delete`。
 - 内容接口（`search` / `detail` / `douban` / `hot-list` / `bangumi` / `quality` / `live/*`）用 `guardRequest()`；管理接口（`admin` / `publish` / `source-list` / `source/test`）用 `guardAdmin()`。
+
+## 第三轮补充：设置里的「站点与账号」
+
+| 文件 | 改动 |
+| --- | --- |
+| `src/components/site-policy-panel.tsx`（新） | 设置抽屉「偏好设置 → 站点与账号」：站长直接改 `accessMode` / `allowRegister` / `adultFilter`（走 `settings.save`），普通人看到只读当前策略 + 「登录 / 注册」「站长登录」两个入口 |
+| `src/lib/auth-client.ts`（新） | 从 `src/app/admin/page.tsx` 里抽出的 `authFetch<T>()`（原来只在后台组件内部），设置面板复用同一实现 |
+| `src/components/source-manager.tsx` | `SecondaryTab` 加 `'site'`，`prefs` 二级页签最前插入「站点与账号」，抽屉里挂 `<SitePolicyPanel />` |
+| `src/components/header.tsx` | ① 去掉并排的第二枚齿轮（原 `/admin` 链接），后台入口收到设置抽屉与「我的」账号卡；② `openSettings()` 改为「已登录直接开抽屉，未登录一律先弹登录/注册选择」；③ 手机折叠菜单对已登录站长补「管理后台」 |
+| `src/components/access-gate-modal.tsx` | 新增可选 `onSkip`：「先不登录，继续」，只在 `accessMode === 'open'` 时由调用方传入 |
+
+- 为什么这么改：上游 LibreTV 的「超管配置」在设置面板里，本站把访问策略放进了 `/admin`，结果设置里完全看不到「开登录 / 开注册」，用户会判断成功能丢失。现在两处都能改，数据同一份（`.data/site.json` 的 `settings`）。
+- 权限边界没变：改这些开关仍只认站长（`guardAdmin()`），设置面板对普通账号只显示只读状态。

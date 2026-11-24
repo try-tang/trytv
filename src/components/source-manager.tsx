@@ -28,6 +28,7 @@ import { exportConfig, importConfig } from '@/lib/db';
 import { PERSIST_KEY } from '@/lib/persist-storage';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from './auth';
+import { SitePolicyPanel } from './site-policy-panel';
 import { useAccess } from './access';
 import Link from 'next/link';
 import { api } from '@/lib/client-api';
@@ -48,7 +49,7 @@ import { describeParseStats } from '@/lib/tvbox-parser';
  */
 
 type PrimaryTab = 'sources' | 'prefs' | 'data';
-type SecondaryTab = 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'io';
+type SecondaryTab = 'site' | 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'io';
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
   { id: 'sources', label: '源管理', icon: 'link' },
@@ -63,6 +64,9 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
     { id: 'subs', label: '数据源订阅' },
   ],
   prefs: [
+    // 站点策略（谁可以看 / 是否开放注册）原先只在 /admin 里，
+    // 用户在设置里找不到会以为功能被删了，所以设置也放一份入口。
+    { id: 'site', label: '站点与账号' },
     { id: 'playback', label: '播放与过滤' },
     { id: 'image', label: '封面图加载' },
     { id: 'home', label: '首页与内容' },
@@ -161,6 +165,7 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
         </div>
       }
     >
+      {current === 'site' && <SitePolicyPanel />}
       {current === 'vod' && <VodSourcesPanel />}
       {current === 'live' && <LiveSourceManager />}
       {current === 'playback' && <PlaybackPanel />}
