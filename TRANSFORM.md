@@ -205,3 +205,24 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 
 - 为什么这么改：上游 LibreTV 的「超管配置」在设置面板里，本站把访问策略放进了 `/admin`，结果设置里完全看不到「开登录 / 开注册」，用户会判断成功能丢失。现在两处都能改，数据同一份（`.data/site.json` 的 `settings`）。
 - 权限边界没变：改这些开关仍只认站长（`guardAdmin()`），设置面板对普通账号只显示只读状态。
+
+## 第四轮补充：后台「配置」页签（JSON 编辑器，参考 hafrey1/LunaTV-config 的 web-editor）
+
+新增/改动：
+
+| 文件 | 作用 |
+| --- | --- |
+| `src/lib/admin-config.ts` | 前后端共用的纯逻辑：`toEditableConfig()`（口令哈希换成 `<已设置>`）、`parseConfig()`（只允许 `settings` / `shorts` 两个顶层字段，逐字段校验并回行列号）、`stringifyConfig()` |
+| `src/components/admin-config-panel.tsx` | Monaco 编辑器面板：左栏工具面板（文件 / JSON / 显示）、主区三页签（编辑器 / 树状视图 / 预览）、底部状态栏（行列 / 选中字符 / UTF-8 / 校验 / 最后保存）、`Ctrl+S` 保存、`Ctrl+O` 重新载入 |
+| `src/lib/site-data.ts` | 新增 `replaceShorts()`，整体替换短剧数组（保留自带 id，非法条目丢弃，上限 200） |
+| `src/app/api/admin/route.ts` | 新增 `res=config`（读）与 `config.save`（写），口令三态：占位符不动 / 空串清除 / 其它值重设 |
+| `src/app/admin/page.tsx` | 新增「配置」标签页 |
+| `src/components/icon.tsx` | 图标补 `file` / `sort` / `collapse` / `copy` / `code` |
+| `scripts/sync-monaco.mjs` | 从 `node_modules/monaco-editor/min/vs` 裁剪出 JSON 编辑所需子集到 `public/monaco/vs`（约 4.6 MB） |
+| `public/monaco/vs/**` | 提交进仓库的自托管 Monaco 资源，后台不连 CDN |
+
+为什么只做「编辑器」：LunaTV-config 的 web-editor 本质是借用户的 GitHub Token 直接读写它自己仓库里的
+`LunaTV-config.json`（外加一个 Cloudflare Worker 做 CORS 代理和 Base58 订阅）。本站的配置本来就在服务端
+（`.data/site.json`），后台已经能用 `PASSWORD` 鉴权，所以不需要 Token、不需要 Worker，直接编辑本站配置。
+
+权限边界未变：`config.save` 走 `guardAdmin()`，只有站长会话能写；`shortsPasswordHash` 永远不下发哈希原文。

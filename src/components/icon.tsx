@@ -38,7 +38,13 @@ export type IconName =
   /* —— 短剧 / 全屏 / 音量 —— */
   | 'volume'
   | 'volumeMute'
-  | 'expand';
+  | 'expand'
+  /* 后台配置编辑器用的图标（文件 / 排序 / 折叠 / 复制 / 代码） */
+  | 'file'
+  | 'sort'
+  | 'collapse'
+  | 'copy'
+  | 'code';
 
 const PATHS: Record<IconName, ReactNode> = {
   close: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />,
@@ -224,6 +230,46 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   /** 静音 */
+  file: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5A3.375 3.375 0 0 0 10.125 2.25H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+    />
+  ),
+  sort: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5"
+    />
+  ),
+  collapse: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="m9 9 3 3m0 0 3-3m-3 3V4.5M3.75 15h16.5"
+    />
+  ),
+  copy: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75"
+    />
+  ),
+  code: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="m17.25 6.75 4.5 4.5-4.5 4.5M6.75 17.25l-4.5-4.5 4.5-4.5"
+    />
+  ),
   volumeMute: (
     <>
       <path

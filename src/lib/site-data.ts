@@ -405,6 +405,28 @@ export function updateShort(id: string, patch: ShortInput): Promise<ShortEntry |
   });
 }
 
+/**
+ * 整体替换短剧清单（后台「配置」页签保存 JSON 时用）。
+ *
+ * 与逐条 add/update 的区别：这里保留条目自带的 id（缺 id 的才新生成），
+ * 所以顺序调整、批量改名都不会导致播放进度/收藏关联的 id 漂移。
+ * 非法条目（缺 title 或既无 url 又无分集）会被丢掉，不阻断整次保存。
+ */
+export function replaceShorts(list: ShortInput[]): Promise<ShortEntry[]> {
+  return mutate((data) => {
+    const next: ShortEntry[] = [];
+    for (const item of list) {
+      const id = typeof (item as { id?: unknown }).id === 'string' ? (item as { id: string }).id : '';
+      const base = id ? data.shorts.find((s) => s.id === id) : undefined;
+      const entry = normalizeShort(item, base);
+      if (entry) next.push(entry);
+      if (next.length >= MAX_SHORTS) break;
+    }
+    data.shorts = next;
+    return next;
+  });
+}
+
 export function removeShort(id: string): Promise<boolean> {
   return mutate((data) => {
     const before = data.shorts.length;

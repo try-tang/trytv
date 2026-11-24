@@ -9,6 +9,7 @@ import {
   removeRequest,
   removeShort,
   removeTip,
+  replaceShorts,
   setNotice,
   stats,
   updateRequest,
@@ -16,6 +17,7 @@ import {
   updateShort,
   updateTip,
 } from '@/lib/site-data';
+import { SECRET_PLACEHOLDER, parseConfig, toEditableConfig } from '@/lib/admin-config';
 import {
   countUsers,
   createUser,
@@ -33,7 +35,7 @@ export const runtime = 'nodejs';
  *
  * 鉴权只认站长密码（guardAdmin），注册用户即使已登录也进不来。
  *
- * GET  ?res=stats|requests|tips|users|settings|shorts|all
+ * GET  ?res=stats|requests|tips|users|settings|shorts|config|all
  * POST { action:
  *   'request.status' | 'request.reply' | 'request.delete'
  * | 'tip.status' | 'tip.delete'
@@ -41,6 +43,7 @@ export const runtime = 'nodejs';
  * | 'settings.save'          // { accessMode?, allowRegister?, siteName?, slogan?, banner?, adultFilter? }
  * | 'shorts.save'            // { enabled?, password? }  口令走 scrypt 哈希，only-hash-落盘
  * | 'shorts.add' | 'shorts.update' | 'shorts.delete'     // 私密短剧清单维护
+ * | 'config.save'            // { json } 整段 JSON，仅 settings + shorts 两字段
  * | 'user.create'            // { username, password, nick? }
  * | 'user.disable' | 'user.enable' | 'user.password' | 'user.delete'
  * }
@@ -60,6 +63,20 @@ export async function GET(req: Request) {
   if (res === 'users') return NextResponse.json({ ok: true, users: listUsers(), count: countUsers() });
   if (res === 'settings') return NextResponse.json({ ok: true, settings: getSettings() });
   if (res === 'shorts') return NextResponse.json({ ok: true, shorts: listShorts() });
+  if (res === 'config') {
+    const settings = getSettings();
+    return NextResponse.json({
+      ok: true,
+      config: toEditableConfig(settings, listShorts()),
+      /** 给编辑器做「哪些字段可以改」的提示与只读元信息 */
+      meta: {
+        file: 'site.json',
+        editable: ['settings', 'shorts'],
+        readOnly: ['requests', 'tips', 'notice'],
+        updatedAt: settings.updatedAt,
+      },
+    });
+  }
 
   return NextResponse.json({
     ok: true,
@@ -168,6 +185,64 @@ export async function POST(req: Request) {
         ok: true,
         settings,
         envPassword: Boolean(process.env.SHORTS_PASSWORD),
+      });
+    }
+
+    case 'config.save': {
+      // 后台「配置」页签：整段 JSON 保存。
+      // 只接受 settings / shorts 两个字段（见 lib/admin-config.ts 的校验），
+      // 求片、赞赏、通知有各自的表单页签，绝不能被一次整体覆盖清空。
+      const text = typeof body.json === 'string' ? body.json : '';
+      const parsed = parseConfig(text);
+      if (!parsed.ok) {
+        return NextResponse.json(
+          { error: parsed.error, line: parsed.line, column: parsed.column },
+          { status: 400 }
+        );
+      }
+
+      const incoming = parsed.value.settings;
+      const current = getSettings();
+      const patch: Parameters<typeof updateSettings>[0] = {};
+
+      if (incoming.accessMode !== undefined) patch.accessMode = incoming.accessMode;
+      if (incoming.allowRegister !== undefined) patch.allowRegister = incoming.allowRegister;
+      if (incoming.siteName !== undefined) patch.siteName = incoming.siteName;
+      if (incoming.slogan !== undefined) patch.slogan = incoming.slogan;
+      if (incoming.banner !== undefined) patch.banner = incoming.banner;
+      if (incoming.adultFilter !== undefined) patch.adultFilter = incoming.adultFilter;
+      if (incoming.shortsEnabled !== undefined) patch.shortsEnabled = incoming.shortsEnabled;
+
+      // 口令：占位符 = 保持原哈希；空串/缺省 = 清除；其它 = 当新口令重新哈希
+      const incomingHash = incoming.shortsPasswordHash;
+      if (incomingHash === SECRET_PLACEHOLDER) {
+        // 保持原口令，不动
+      } else {
+        const pw = String(incomingHash ?? '').trim();
+        if (!pw) {
+          if (current.shortsPasswordHash) {
+            patch.shortsPasswordHash = undefined;
+            patch.shortsPasswordAt = undefined;
+          }
+        } else if (pw.length < 4) {
+          return NextResponse.json(
+            { error: `settings.shortsPasswordHash：新口令至少 4 位（想保留原口令请填 "${SECRET_PLACEHOLDER}"）` },
+            { status: 400 }
+          );
+        } else {
+          patch.shortsPasswordHash = hashPassword(pw);
+          patch.shortsPasswordAt = Date.now();
+        }
+      }
+
+      const settings = await updateSettings(patch);
+      const shorts = await replaceShorts(parsed.value.shorts ?? []);
+      const dropped = (parsed.value.shorts ?? []).length - shorts.length;
+      return NextResponse.json({
+        ok: true,
+        config: toEditableConfig(settings, shorts),
+        // dropped > 0 说明有条目缺 title 或既没 url 又没分集，被静默丢弃了
+        stats: { total: shorts.length, dropped },
       });
     }
 

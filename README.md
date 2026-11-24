@@ -472,6 +472,51 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 - **通知**：写一条公告并开启，前台按 `version` 只弹一次（改动正文会自增版本号）
 - **站点设置**：访问模式（所有人可看 / 需登录 / 仅会员可看）、是否开放注册、站名、口号、顶部提示条
 - **用户管理**：手动建号、停用 / 启用、重置密码、删除
+- **配置**：内置 JSON 编辑器，直接改 `settings` 与 `shorts` 两个字段（见下一节）
+
+### 配置（JSON 编辑器）
+
+「配置」标签页是一块 Monaco 编辑器，把 `/api/admin?res=config` 返回的**可编辑配置**整段摊开给你改，
+保存走 `config.save`。适合批量改短剧清单、或把配置复制到另一台机器上。
+
+只有两个顶层字段可写（其余一律报错，避免误改业务数据）：
+
+```json
+{
+  "settings": {
+    "accessMode": "open",
+    "allowRegister": true,
+    "siteName": "看看电视",
+    "slogan": "每日一部好片",
+    "banner": "",
+    "adultFilter": false,
+    "shortsEnabled": true,
+    "shortsPasswordHash": "<已设置>"
+  },
+  "shorts": [
+    { "id": "short-001", "title": "示例短剧", "url": "https://example.com/ep01.mp4" }
+  ]
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `accessMode` | 只能是 `open` / `login` / `members` |
+| `shortsPasswordHash` | **三态**：原样留 `<已设置>` = 不改口令；写成空串 `""` = 清除口令；写别的字符串 = 设成这个新口令（会就地哈希，明文不入库） |
+| `shorts[].id` | 留着就更新那一条，删掉就新生成；数组整体替换（`config.save` 是全量覆盖，不是增量） |
+| `shorts[].url` / `episodes` | 二者至少有一个；缺 `title`、缺地址的条目会被拒绝并指出是第几条 |
+
+编辑器的左栏是工具面板，底部是状态栏，和 LunaTV-config 的 web 编辑器一个路子：
+
+- 文件：导出当前内容为 `.json`、导入本地 `.json`（导入只填编辑器，仍需点保存）
+- JSON：格式化、压缩成一行、校验（结果带行列）、复制全文
+- 显示：自动换行 / 缩略图 / 行号 / 字号
+- 主区三个页签：编辑器、树状视图（全部展开 / 收起）、预览；底部状态栏显示行列、选中字符数、UTF-8、校验状态、最后保存时间
+- 快捷键：`Ctrl/Cmd+S` 保存、`Ctrl/Cmd+O` 重新载入；保存失败会把光标跳到出错的那一行
+
+> Monaco 是**自托管**的：`public/monaco/vs` 里放了裁剪过的运行子集（约 4.6 MB），
+> 后台不会去连 `cdn.jsdelivr.net`，内网 / 离线部署也能用。
+> 升级 `monaco-editor` 后执行 `npm run sync:monaco` 重新生成该目录（`scripts/sync-monaco.mjs`）。
 
 ### 访问模式与用户体系
 

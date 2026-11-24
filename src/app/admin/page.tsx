@@ -8,6 +8,7 @@ import { Icon } from '@/components/icon';
 import { EmptyState } from '@/components/states';
 import { useToast } from '@/components/toast';
 import { useAuth } from '@/components/auth';
+import { ConfigPanel } from '@/components/admin-config-panel';
 import { noticeApi, type RequestEntry, type TipEntry, type NoticeInfo } from '@/lib/site-client';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +27,7 @@ import { cn } from '@/lib/utils';
  * 5. 账号管理：注册用户列表、新建、停用/启用、重置密码、删除。
  */
 
-type Tab = 'requests' | 'tips' | 'notice' | 'shorts' | 'settings' | 'users';
+type Tab = 'requests' | 'tips' | 'notice' | 'shorts' | 'config' | 'settings' | 'users';
 
 interface SettingsInfo {
   accessMode: 'open' | 'login' | 'members';
@@ -238,6 +239,7 @@ export default function AdminPage() {
               { key: 'tips', label: '赞赏留言' },
               { key: 'notice', label: '站长通知' },
               { key: 'shorts', label: `私密短剧${shorts.length ? ` (${shorts.length})` : ''}` },
+              { key: 'config', label: '配置' },
               { key: 'settings', label: '站点设置' },
               { key: 'users', label: `账号${stats?.users?.total ? ` (${stats.users.total})` : ''}` },
             ] as { key: Tab; label: string }[]
@@ -289,6 +291,8 @@ export default function AdminPage() {
               await act(key, payload, msg);
             }}
           />
+        ) : tab === 'config' ? (
+          <ConfigPanel />
         ) : tab === 'settings' ? (
           <SettingsPanel
             settings={settings}

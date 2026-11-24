@@ -34,6 +34,8 @@ _*.html
 _*.json
 _dtest*
 
-# 纯文档：不参与镜像构建
+# 纯文档 / 开发脚本：不参与镜像构建
+# public/monaco/vs 是运行时静态资源，必须进镜像（不能写成 public 之类的大范围排除）
 docs
 TRANSFORM.md
+scripts
