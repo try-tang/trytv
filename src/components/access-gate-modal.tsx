@@ -30,6 +30,7 @@ export function AccessGateModal({
   reason,
   defaultMode = 'user',
   onSkip,
+  adminRedirect,
 }: {
   open: boolean;
   onClose: () => void;
@@ -42,6 +43,11 @@ export function AccessGateModal({
    * 否则访客会被自己的弹窗锁在门外（设置只是偏好，不是权限）。
    */
   onSkip?: () => void;
+  /**
+   * 站长登录成功后要不要直接进后台。不传就只是「登录成功」，
+   * 由调用方决定后续（顶栏齿轮要接着开设置抽屉，不能跳走）。
+   */
+  adminRedirect?: string;
 }) {
   const { accessMode, allowRegister, admin, user, loginUser, registerUser, refresh } = useAccess();
   const { toast } = useToast();
@@ -97,6 +103,10 @@ export function AccessGateModal({
       await refresh();
       onSuccess?.();
       onClose();
+      // 站长登录后直接进后台（「我的 → 管理员登录」这条路径期待的就是这个）
+      if (mode === 'admin' && adminRedirect) {
+        window.location.href = adminRedirect;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败，请重试');
     } finally {

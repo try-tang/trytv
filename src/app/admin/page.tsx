@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Header } from '@/components/header';
 import { SiteFooter } from '@/components/site-footer';
@@ -9,6 +10,7 @@ import { EmptyState } from '@/components/states';
 import { useToast } from '@/components/toast';
 import { useAuth } from '@/components/auth';
 import { ConfigPanel } from '@/components/admin-config-panel';
+import { STATUS_QUERY_KEY } from '@/lib/client-api';
 import { noticeApi, type RequestEntry, type TipEntry, type NoticeInfo } from '@/lib/site-client';
 import { cn } from '@/lib/utils';
 
@@ -178,22 +180,9 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen">
         <Header />
-        <main className="max-w-md mx-auto px-4 py-16">
-          <EmptyState
-            icon="gear"
-            title="需要先登录站长账号"
-            description="后台用的是站长密码（部署时设的 PASSWORD，没设置过则默认 admin），和访客账号不是一回事。"
-            action={
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Link href="/login?next=%2Fadmin&tab=admin" className="btn-primary btn-sm">
-                  输入站长密码
-                </Link>
-                <Link href="/mine" className="btn-ghost btn-sm">
-                  去「我的」登录
-                </Link>
-              </div>
-            }
-          />
+        <main className="max-w-md mx-auto px-4 py-12">
+          {/* 就地输密码：从「我的 → 进入后台」点进来的人不该再被弹去另一个页面重输一遍 */}
+          <AdminGate onSuccess={() => void loadAll()} />
         </main>
         <SiteFooter />
       </div>
@@ -305,6 +294,74 @@ export default function AdminPage() {
       </main>
 
       <SiteFooter />
+    </div>
+  );
+}
+
+/**
+ * 后台的落地登录框：只输站长密码，成功即刷新当前页数据。
+ * 不跳转 —— middleware 已经把未登录访问 /admin 重定向到 /login，
+ * 这里覆盖的是「会话过期 / 直接访问但客户端还没同步」的情况。
+ */
+function AdminGate({ onSuccess }: { onSuccess: () => void }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(data?.error || '站长密码不正确');
+      await queryClient.invalidateQueries({ queryKey: STATUS_QUERY_KEY });
+      toast('站长已登录', 'success');
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '登录失败');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-line bg-card px-4 py-5">
+      <h1 className="text-base font-semibold text-content flex items-center gap-2 mb-1">
+        <Icon name="gear" className="w-4 h-4 text-accent" />
+        站长登录
+      </h1>
+      <p className="text-xs text-faint leading-relaxed mb-3">
+        输入站长密码即可进入后台。这里是部署时设置的 PASSWORD（没设置过默认 admin），
+        与前台访客账号不是一回事。
+      </p>
+      <form onSubmit={submit} className="space-y-2.5">
+        <input
+          className="input w-full"
+          type="password"
+          autoComplete="current-password"
+          placeholder="站长密码（默认 admin）"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoFocus
+        />
+        {error && <p className="text-xs text-danger">{error}</p>}
+        <button type="submit" className="btn-primary w-full h-9 rounded-lg text-sm" disabled={busy}>
+          {busy ? '验证中…' : '进入后台'}
+        </button>
+      </form>
+      <p className="mt-3 text-[11px] text-faint">
+        想用注册账号？<Link href="/mine" className="text-accent hover:underline">去「我的」</Link>
+        可以登录 / 注册，但后台只认站长密码。
+      </p>
     </div>
   );
 }

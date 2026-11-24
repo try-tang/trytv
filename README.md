@@ -462,6 +462,7 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 | `/api/admin` | GET / POST | 后台：`?res=stats\|requests\|tips\|users\|settings\|all`；POST `action=request.status\|request.reply\|request.delete\|tip.status\|tip.delete\|notice.save\|settings.save\|user.create\|user.disable\|user.enable\|user.password\|user.delete` |
 | `/api/user` | GET / POST / DELETE | 注册用户：GET 当前身份与站点策略；POST `action=login\|register`；DELETE 退出 |
 | `/api/access` | GET | 访问策略与当前身份（middleware 读取，`no-store`） |
+| `/api/library` | GET / POST | 观影记录与待看清单云同步：GET 读当前账号的记录（没存过返回 `null`），POST 整包覆盖 |
 
 ## 站长后台
 
@@ -473,6 +474,19 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 - **站点设置**：访问模式（所有人可看 / 需登录 / 仅会员可看）、是否开放注册、站名、口号、顶部提示条
 - **用户管理**：手动建号、停用 / 启用、重置密码、删除
 - **配置**：内置 JSON 编辑器，直接改 `settings` 与 `shorts` 两个字段（见下一节）
+
+### 账号与观影记录同步
+
+- **顶栏右上角**：未登录时是「登录」按钮，点开可选「登录 / 注册 / 站长」；已登录后变回齿轮
+  （齿轮是**设置**：数据源、订阅、封面加载方式、站点与账号）。后台入口不在顶栏——
+  它在设置抽屉的「站点与账号」页和「我的」页的账号卡里，避免两枚一模一样的齿轮并排放着分不清。
+- **「我的」→「管理员登录」**：只输站长密码，验证通过直接进 `/admin`（不跳 `/login` 再输一遍）。
+- **「我的」→「登录 / 注册」**：用注册账号，登录后顶栏、设置、我的都按账号显示。
+- **观影记录 / 待看清单跟着账号走**：登录后自动与服务端对齐——
+  - 服务端还没有这个账号的记录 → 把本机现有的记录「认领」上去；
+  - 服务端已有 → 两边按条目 `id` 合并（取时间戳更新的那条），合并结果同时写回本地与服务端。
+  之后每次看片、加收藏都会在 2.5 秒内增量推一次（`src/lib/watch-sync.ts` 里的 `schedulePush`）。
+  数据落在 `.data/site.json` 的 `library.<uid>`，和求片/留言同一个文件，备份它就是全备。
 
 ### 配置（JSON 编辑器）
 

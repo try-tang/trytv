@@ -94,12 +94,43 @@ export interface SiteSettings {
   updatedAt: number;
 }
 
+/**
+ * 单个账号的观影记录 / 待看清单（/api/library 云同步）。
+ * 只按注册用户的 uid 存；站长密码会话不带这份数据。
+ */
+export interface LibraryEntry {
+  history: {
+    id: string;
+    sourceKey: string;
+    sourceUrl?: string;
+    vodId: string;
+    title: string;
+    pic?: string;
+    episodeIndex: number;
+    totalEpisodes: number;
+    playbackPosition: number;
+    duration: number;
+    timestamp: number;
+  }[];
+  watchlist: {
+    id: string;
+    title: string;
+    pic?: string;
+    sourceKey?: string;
+    vodId?: string;
+    addedAt: number;
+  }[];
+  updatedAt: number;
+}
+
 export interface SiteData {
   requests: RequestEntry[];
   tips: TipEntry[];
   notice: NoticeEntry;
   shorts: ShortEntry[];
   settings: SiteSettings;
+  /** uid -> 该账号的观影记录与待看清单 */
+  library?: Record<string, LibraryEntry>;
 }
 
 const MAX_REQUESTS = 5000;
@@ -169,6 +200,11 @@ function readFile(): SiteData {
       shorts: Array.isArray(parsed.shorts) ? parsed.shorts : [],
       // 站点设置同理：旧文件没有就退回默认（所有人可看 + 开放注册）
       settings: normalizeSettings(parsed.settings),
+      // 账号云同步数据：旧文件没有就是空对象
+      library:
+        parsed.library && typeof parsed.library === 'object'
+          ? (parsed.library as Record<string, LibraryEntry>)
+          : {},
     };
   } catch {
     // 文件不存在 / 内容损坏都退回默认值（损坏时保留一份 .bak 便于排查）
@@ -331,6 +367,39 @@ export function setNotice(patch: { body?: string; enabled?: boolean }): Promise<
 }
 
 // —— 站点设置 ——
+
+/**
+ * 账号云同步：读某个 uid 的记录（没有就返回 null，客户端据此判断要不要「认领本地记录」）。
+ */
+export function getLibrary(uid: string): LibraryEntry | null {
+  const data = readFile();
+  const hit = data.library?.[uid];
+  return hit ?? null;
+}
+
+/** 账号云同步：整包覆盖某个 uid 的记录 */
+export async function setLibrary(
+  uid: string,
+  next: { history: LibraryEntry['history']; watchlist: LibraryEntry['watchlist'] }
+): Promise<LibraryEntry> {
+  const entry: LibraryEntry = {
+    history: next.history,
+    watchlist: next.watchlist,
+    updatedAt: Date.now(),
+  };
+  await mutate((data) => {
+    if (!data.library) data.library = {};
+    data.library[uid] = entry;
+  });
+  return entry;
+}
+
+/** 删除某个账号的记录（后台删号时一并清掉） */
+export async function removeLibrary(uid: string): Promise<void> {
+  await mutate((data) => {
+    if (data.library && data.library[uid]) delete data.library[uid];
+  });
+}
 
 export function getSettings(): SiteSettings {
   return getSiteData().settings;

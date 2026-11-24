@@ -42,6 +42,7 @@ import {
   db,
 } from '@/lib/db';
 import { cn, formatTime } from '@/lib/utils';
+import { schedulePush } from '@/lib/watch-sync';
 
 /**
  * 播放页（唯一入口，替代旧版 watch.html → player.html 跳转链）。
@@ -186,7 +187,9 @@ function WatchContent() {
         playbackPosition: 0,
         duration: 0,
         timestamp: Date.now(),
-      }).catch(() => {});
+      })
+        .then(() => schedulePush())
+        .catch(() => {});
     }, 2000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,7 +200,10 @@ function WatchContent() {
     (position: number, duration: number) => {
       if (vodId) {
         saveProgress(sourceKey, vodId, currentIndex, position, duration).catch(() => {});
-        updateHistoryProgress(sourceKey, vodId || currentUrl, position, duration).catch(() => {});
+        // 进度也顺手同步到账号（我们传的是「集序号」，历史记录能原样还原播放位置）
+        updateHistoryProgress(sourceKey, vodId || currentUrl, position, duration)
+          .then(() => schedulePush())
+          .catch(() => {});
       }
     },
     [sourceKey, vodId, currentIndex, currentUrl]

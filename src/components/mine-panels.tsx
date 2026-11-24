@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, removeHistory, clearAllHistory, type HistoryEntry } from '@/lib/db';
 import { Icon } from './icon';
 import { cn } from '@/lib/utils';
+import { schedulePush, writeLocalWatchlist } from '@/lib/watch-sync';
 import { EmptyState } from './states';
 import { SmartImage } from './smart-image';
 import { useAppStore } from '@/lib/store';
@@ -43,11 +44,9 @@ export function readWatchlist(): WatchItem[] {
 }
 
 export function writeWatchlist(items: WatchItem[]): void {
-  try {
-    window.localStorage.setItem(WATCHLIST_KEY, JSON.stringify(items));
-  } catch {
-    /* 隐私模式下不可写 */
-  }
+  // 与 src/lib/watch-sync.ts 共用同一份实现（同一个 localStorage 键），
+  // 避免两边格式漂移导致「登录同步后本地反而读不到」。
+  writeLocalWatchlist(items);
 }
 
 /** 加入/移出待看，返回加入后的状态 */
@@ -57,10 +56,13 @@ export function toggleWatch(item: Omit<WatchItem, 'addedAt'>): boolean {
   if (idx >= 0) {
     list.splice(idx, 1);
     writeWatchlist(list);
+    // 已登录时顺手推一份到服务端（未登录时 syncer 会静默跳过）
+    schedulePush();
     return false;
   }
   list.unshift({ ...item, addedAt: Date.now() });
   writeWatchlist(list);
+  schedulePush();
   return true;
 }
 
@@ -206,6 +208,7 @@ export function WatchListPanel() {
           onClick={() => {
             if (window.confirm('确定清空待看列表？')) {
               writeWatchlist([]);
+              schedulePush();
               reload();
             }
           }}

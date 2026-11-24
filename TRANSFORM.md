@@ -206,7 +206,7 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 - 为什么这么改：上游 LibreTV 的「超管配置」在设置面板里，本站把访问策略放进了 `/admin`，结果设置里完全看不到「开登录 / 开注册」，用户会判断成功能丢失。现在两处都能改，数据同一份（`.data/site.json` 的 `settings`）。
 - 权限边界没变：改这些开关仍只认站长（`guardAdmin()`），设置面板对普通账号只显示只读状态。
 
-## 第四轮补充：后台「配置」页签（JSON 编辑器，参考 hafrey1/LunaTV-config 的 web-editor）
+## 第三轮补充（续）：后台「配置」页签（JSON 编辑器，参考 hafrey1/LunaTV-config 的 web-editor）
 
 新增/改动：
 
@@ -226,3 +226,32 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 （`.data/site.json`），后台已经能用 `PASSWORD` 鉴权，所以不需要 Token、不需要 Worker，直接编辑本站配置。
 
 权限边界未变：`config.save` 走 `guardAdmin()`，只有站长会话能写；`shortsPasswordHash` 永远不下发哈希原文。
+
+## 第四轮补充：登录入口与账号同步
+
+用户反馈（原话）：「打开我的点击管理员面板，应该只需要输入密码，就可以直接进入管理员面板了，主页的设置修改为 登录 登录之后能够同步个人的 观影历史和收藏，修复一下主页顶端的那个推荐，他滚动不正常」
+
+| 文件 | 改动 |
+| --- | --- |
+| `src/lib/watch-sync.ts` | 新增。`syncAfterLogin()`（登录后认领/合并）、`schedulePush()`（2.5s 防抖增量推送）、`pushBundle()`、`readLocalWatchlist/writeLocalWatchlist` |
+| `src/app/api/library/route.ts` | 新增。`GET` 读当前账号的记录（没存过 `null`），`POST` 整包覆盖；上限 500 条历史 / 300 条待看 |
+| `src/lib/site-data.ts` | `SiteData.library?: Record<string, LibraryEntry>`；新增 `getLibrary()` / `setLibrary()` / `removeLibrary()`；`readFile()` 兼容旧文件 |
+| `src/components/access.tsx` | `loginUser` / `registerUser` 成功后 `syncAfterLogin()`；新增 `usingDefaultPassword`（提示仍在用默认密码 admin） |
+| `src/components/access-gate-modal.tsx` | 新增 `adminRedirect`：站长登录成功后可直接跳后台 |
+| `src/components/mine-account-card.tsx` | 「管理员登录」传 `adminRedirect="/admin"`，输完密码直达后台 |
+| `src/components/service-sheet.tsx` | 「管理员登录」同样直达后台 |
+| `src/components/header.tsx` | 未登录时顶栏是「登录」按钮，已登录才显示齿轮；手机折叠菜单补「设置」项 |
+| `src/app/admin/page.tsx` | 未登录时不再给跳转按钮，直接渲染就地登录框 `AdminGate`（只输站长密码） |
+| `src/components/home-hero.tsx` | 轮播新增 `settleRef`：程序化滚动期间忽略中间态 scroll 事件（修「来回抖」）；窗口尺寸变化后按比例重算位置；smooth 后 420ms 校准一次 |
+| `src/components/mine-panels.tsx` | `writeWatchlist` 改为复用 `watch-sync` 的实现（同一 localStorage 键，格式不会漂移）；加入/移出/清空时触发 `schedulePush()` |
+| `src/app/watch/view.tsx` | 首次写入记录与进度落盘后触发 `schedulePush()` |
+
+### 为什么「管理员登录」要直达后台
+「我的 → 管理员登录」的语义就是「我要进后台」。之前是验证通过后弹窗关掉、停在「我的」页，
+用户还得再找一次入口——中间任何一步渲染慢一点就会被理解成「打不开」。现在验证成功后直接
+`window.location.href = '/admin'`；而顶栏齿轮那条路径不传 `adminRedirect`，登录后照旧接着开设置抽屉，两种意图分开。
+
+### 为什么观影记录要「整包替换」而不是逐条 diff
+记录量级是百级、一整包只有几 KB；逐条 diff 需要版本向量或时间戳收敛规则，
+在「手机和电视同时看」这种场景下反而更容易打架。整包覆盖 + 登录时按 `id` 合并（取较新那条）足够用，
+且只有一条路径，不会出现「本地和服务端都觉得自己是对的」。

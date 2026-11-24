@@ -73,25 +73,62 @@ export function HomeHero({ onPick }: { onPick: (title: string) => void }) {
     return () => clearInterval(timer);
   }, [paused]);
 
+  // 程序化滚动的目标位置；用于区分「自己滚的」和「用户手指滚的」。
+  // 不这么做的话，smooth 滚动途中触发的 scroll 事件会被 onScroll 换算成中间页，
+  // setIndex 被回写成 1 又滚回头，轮播就卡在原地来回抖。
+  const settleRef = useRef<{ target: number; until: number }>({ target: 0, until: 0 });
+
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
+    const width = track.clientWidth || track.getBoundingClientRect().width;
+    if (!width) return;
+    const left = index * width;
+    settleRef.current = { target: index, until: Date.now() + 900 };
+
     // 兜底：某些内核/内嵌 WebView 没有 Element.scrollTo（会抛 TypeError 把整块轮播带崩），
     // 退化为直接写 scrollLeft；smooth 不可用时也能保证位置正确。
-    const behavior = index > 0 ? 'smooth' : 'auto';
+    const behavior: ScrollBehavior = index > 0 ? 'smooth' : 'auto';
     try {
       if (typeof track.scrollTo === 'function') {
-        track.scrollTo({ left: index * track.clientWidth, behavior });
+        track.scrollTo({ left, behavior });
+        // smooth 滚动在部分浏览器里会被后续 layout 打断，短延时后再校准一次
+        window.setTimeout(() => {
+          if (Math.abs(track.scrollLeft - left) > 4) {
+            try {
+              track.scrollLeft = left;
+            } catch {
+              /* 忽略 */
+            }
+          }
+        }, 420);
         return;
       }
     } catch {
       /* 落到下面的兜底 */
     }
     try {
-      track.scrollLeft = index * track.clientWidth;
+      track.scrollLeft = left;
     } catch {
       /* 完全不可滚动就算了，别让轮播区把页面打成错误页 */
     }
+  }, [index]);
+
+  // 窗口尺寸变化后按比例重算位置（旋转屏幕 / 窗口拖动会改变 clientWidth）
+  useEffect(() => {
+    const onResize = () => {
+      const track = trackRef.current;
+      if (!track) return;
+      const width = track.clientWidth;
+      if (!width) return;
+      try {
+        track.scrollLeft = index * width;
+      } catch {
+        /* 忽略 */
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [index]);
 
   const go = useCallback((dir: -1 | 1) => {
@@ -114,7 +151,14 @@ export function HomeHero({ onPick }: { onPick: (title: string) => void }) {
           const el = e.currentTarget;
           if (el.clientWidth === 0) return;
           const next = Math.round(el.scrollLeft / el.clientWidth);
-          if (next !== index && next >= 0 && next < SLIDES.length) setIndex(next);
+          if (next < 0 || next >= SLIDES.length) return;
+          // 自动轮播自己滚出来的事件：只认目标页，别把中间态写回索引
+          const settle = settleRef.current;
+          if (Date.now() < settle.until) {
+            if (next !== settle.target) return;
+            settleRef.current = { target: next, until: 0 };
+          }
+          if (next !== index) setIndex(next);
         }}
       >
         {SLIDES.map((slide, i) => {

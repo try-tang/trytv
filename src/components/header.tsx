@@ -158,25 +158,49 @@ export function Header({
             <IconButton label="下载管理" onClick={requestShowDownloadManager}>
               <Icon name="download" />
             </IconButton>
-            {/* 只留一枚齿轮：后台入口收到设置抽屉的「站点与账号」页和「我的」页账号卡，
-                两枚一模一样的齿轮图标并排，用户分不清哪个是哪个 */}
-            <IconButton label="设置" onClick={openSettings}>
-              <Icon name="gear" />
-            </IconButton>
+            {/* 未登录时这里就是「登录」两个字的按钮（对应原站「右上角点开先登录」），
+                已登录才回到齿轮（此时点开是设置抽屉：源、订阅、封面、站点与账号）。
+                后台入口不在这里——它在设置抽屉的「站点与账号」和「我的」页账号卡里。 */}
+            {access.ready && !access.user && !access.admin ? (
+              <button
+                type="button"
+                onClick={openSettings}
+                className="btn-primary btn-sm rounded-full px-3 ml-0.5 whitespace-nowrap"
+              >
+                登录
+              </button>
+            ) : (
+              <IconButton label="设置" onClick={openSettings}>
+                <Icon name="gear" />
+              </IconButton>
+            )}
           </nav>
 
           {/* 手机：设置直接露出（最常用），其余收进汉堡菜单 */}
           <div className="sm:hidden flex items-center gap-1 shrink-0">
             {/* 与菜单项一致：打开抽屉前先收起菜单，否则关掉设置后汉堡菜单还摊在那儿 */}
-            <IconButton
-              label="设置"
-              onClick={() => {
-                closeMenu();
-                openSettings();
-              }}
-            >
-              <Icon name="gear" />
-            </IconButton>
+            {access.ready && !access.user && !access.admin ? (
+              <button
+                type="button"
+                onClick={() => {
+                  closeMenu();
+                  openSettings();
+                }}
+                className="btn-primary btn-sm rounded-full px-2.5 whitespace-nowrap"
+              >
+                登录
+              </button>
+            ) : (
+              <IconButton
+                label="设置"
+                onClick={() => {
+                  closeMenu();
+                  openSettings();
+                }}
+              >
+                <Icon name="gear" />
+              </IconButton>
+            )}
             <IconButton
               label={menuOpen ? '关闭菜单' : '打开菜单'}
               expanded={menuOpen}
@@ -231,6 +255,15 @@ export function Header({
                 }}
               >
                 下载管理
+              </MenuAction>
+              <MenuAction
+                icon="gear"
+                onClick={() => {
+                  closeMenu();
+                  openSettings();
+                }}
+              >
+                设置
               </MenuAction>
               {FEATURES.admin && access.admin && (
                 <MenuRow href="/admin" active={pathname.startsWith('/admin')} icon="gear" onNavigate={closeMenu}>

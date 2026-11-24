@@ -13,6 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { STATUS_QUERY_KEY } from '@/lib/client-api';
 import { useAppStore } from '@/lib/store';
 import { useToast } from './toast';
+import { syncAfterLogin } from '@/lib/watch-sync';
 
 /**
  * 站点访问策略 + 本站账号状态（客户端）。
@@ -51,6 +52,8 @@ interface AccessState {
   shortsEnabled: boolean;
   /** 是否过滤成人内容（后台「站点设置」） */
   adultFilter: boolean;
+  /** 站长还在用内置默认密码 admin（提示他尽快改掉） */
+  usingDefaultPassword: boolean;
   /** 是否能看内容 */
   canView: boolean;
   /** 是否需要（并且值得）挡住内容：open 模式永远 false */
@@ -72,6 +75,7 @@ const DEFAULTS: AccessState = {
   banner: null,
   shortsEnabled: true,
   adultFilter: false,
+  usingDefaultPassword: false,
   canView: true,
   gated: false,
   refresh: async () => {},
@@ -119,6 +123,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
   const [banner, setBanner] = useState<string | null>(null);
   const [shortsEnabled, setShortsEnabled] = useState(true);
   const [adultFilter, setAdultFilter] = useState(false);
+  const [usingDefaultPassword, setUsingDefaultPassword] = useState(false);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -156,6 +161,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
         if (!res.ok) throw new Error('status failed');
         const s = (await res.json()) as {
           verified?: boolean;
+          usingDefaultPassword?: boolean;
           accessMode?: AccessMode;
           allowRegister?: boolean;
           siteName?: string | null;
@@ -166,6 +172,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
         };
         if (!alive) return;
         setAdmin(Boolean(s.verified));
+        setUsingDefaultPassword(Boolean(s.usingDefaultPassword));
         if (typeof s.shortsEnabled === 'boolean') setShortsEnabled(s.shortsEnabled);
         if (typeof s.adultFilter === 'boolean') setAdultFilter(s.adultFilter);
         // 成人内容过滤的「源头」在后台站点设置：本地没被用户手动改过时以服务端为准
@@ -196,6 +203,12 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       });
       await refresh();
       await queryClient.invalidateQueries();
+      // 登录后把观影记录 / 待看清单与服务端对齐（服务端没记录就把本地认领上去）
+      void syncAfterLogin()
+        .then((r) => {
+          if (r.merged) toast(`已同步观影记录（${r.count} 条）`, 'success');
+        })
+        .catch(() => {});
       toast('登录成功', 'success');
     },
     [queryClient, refresh, toast]
@@ -209,6 +222,8 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       });
       await refresh();
       await queryClient.invalidateQueries();
+      // 新账号在服务端是空的，这里把本机已有记录认领过去，换设备登录就能看到
+      void syncAfterLogin().catch(() => {});
       toast('注册成功，已自动登录', 'success');
     },
     [queryClient, refresh, toast]
@@ -242,6 +257,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       banner,
       shortsEnabled,
       adultFilter,
+      usingDefaultPassword,
       canView,
       gated: accessMode !== 'open' && !canView,
       refresh,
@@ -260,6 +276,7 @@ export function AccessProvider({ children }: { children: ReactNode }) {
       banner,
       shortsEnabled,
       adultFilter,
+      usingDefaultPassword,
       canView,
       refresh,
       loginUser,

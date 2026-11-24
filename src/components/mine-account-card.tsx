@@ -121,6 +121,8 @@ export function MineAccountCard() {
         open={gateOpen}
         onClose={() => setGateOpen(false)}
         defaultMode={gateMode}
+        // 「我的 → 管理员登录」的期待就是「输完密码直接进后台」
+        adminRedirect={gateMode === 'admin' ? '/admin' : undefined}
         reason={
           gateMode === 'admin'
             ? '请输入站长密码（部署时设的 PASSWORD，没设置过则默认 admin）。它和访客账号不是一回事，用来进后台。'
