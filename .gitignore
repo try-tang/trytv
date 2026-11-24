@@ -21,3 +21,9 @@ _build.log
 _dev.log
 _install*.log
 _start.log
+
+# 本地调试产物
+_ck.txt
+_srv*.log
+_devbuild/
+_img/
