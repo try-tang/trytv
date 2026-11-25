@@ -29,6 +29,7 @@ import { PERSIST_KEY } from '@/lib/persist-storage';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from './auth';
 import { SitePolicyPanel } from './site-policy-panel';
+import { SourceImportPanel } from './source-import-panel';
 import { useAccess } from './access';
 import Link from 'next/link';
 import { api } from '@/lib/client-api';
@@ -40,6 +41,7 @@ import {
   type DoubanCategory,
 } from '@/lib/douban-categories';
 import { describeParseStats } from '@/lib/tvbox-parser';
+import { mergeSourceEntries, toLunaConfig, type SourceEntry } from '@/lib/source-text-import';
 
 /**
  * 设置抽屉：顶部两级导航。
@@ -49,7 +51,16 @@ import { describeParseStats } from '@/lib/tvbox-parser';
  */
 
 type PrimaryTab = 'sources' | 'prefs' | 'data';
-type SecondaryTab = 'site' | 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'io';
+type SecondaryTab =
+  | 'site'
+  | 'vod'
+  | 'live'
+  | 'subs'
+  | 'import'
+  | 'playback'
+  | 'image'
+  | 'home'
+  | 'io';
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
   { id: 'sources', label: '源管理', icon: 'link' },
@@ -61,6 +72,7 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
   sources: [
     { id: 'vod', label: '点播源' },
     { id: 'live', label: '直播源' },
+    { id: 'import', label: '导入源' },
     { id: 'subs', label: '数据源订阅' },
   ],
   prefs: [
@@ -172,6 +184,7 @@ export function SourceManagerDrawer({ open, onClose }: { open: boolean; onClose:
       {current === 'image' && <ImagePanel />}
       {current === 'home' && <HomePanel />}
       {current === 'subs' && <SourceSubscriptions />}
+      {current === 'import' && <SourceImportSection />}
       {current === 'io' && <ConfigIoPanel />}
     </Drawer>
   );
@@ -963,6 +976,45 @@ const REFRESH_OPTIONS: DropdownOption[] = [
  * - 自动刷新：每个订阅可单独设周期（默认手动），到期才在打开站点时静默同步；
  * - 分享：把当前点播源 + 直播源导出为同格式 JSON 文件，托管到任意位置即可被他人订阅。
  */
+/**
+ * 「导入源」页：把粘贴 / 文件 / URL 三种入口解析出的候选清单接进 store。
+ * 与「数据源订阅」的区别：订阅是 URL 驱动、整体同步（失败即全失败）；
+ * 这里是一次性的手工导入，逐条预览、逐条勾选，适合群里转发的整段 JSON。
+ */
+function SourceImportSection() {
+  const store = useAppStore();
+
+  const existingVod = useMemo(
+    () => [...store.envSources, ...store.customAPIs].map((s) => s.url),
+    [store.envSources, store.customAPIs]
+  );
+  const existingLive = useMemo(
+    () => allLiveSources(store).map((s) => s.url),
+    // allLiveSources 每次调用返回新数组，这里只关心 URL 集合是否变化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [store.liveSubscriptions, store.liveEnvSources]
+  );
+
+  const onImport = async ({
+    sources,
+    liveSources,
+  }: {
+    sources: { name: string; url: string; detail?: string }[];
+    liveSources: { name: string; url: string; epg?: string }[];
+  }) => {
+    for (const s of sources) {
+      store.addCustomApi({ name: s.name, url: s.url, detail: s.detail });
+    }
+    for (const s of liveSources) {
+      store.addLiveSubscription(s.url, s.name, s.epg);
+    }
+  };
+
+  return (
+    <SourceImportPanel existingVod={existingVod} existingLive={existingLive} onImport={onImport} />
+  );
+}
+
 function SourceSubscriptions() {
   const store = useAppStore();
   const { toast } = useToast();
@@ -1098,6 +1150,32 @@ function SourceSubscriptions() {
     toast(`已导出 ${sources.length} 个点播源、${liveSources.length} 个直播源，托管后即可被他人订阅`, 'success');
   };
 
+  /**
+   * 导出成 LunaTV-config 的 api_site 结构，方便直接贴进那边的 web 编辑器。
+   * Luna 只认点播接口，直播源在这里会被忽略（提示里说清楚，免得以为丢了）。
+   */
+  const exportLuna = () => {
+    const all = [...store.envSources, ...store.customAPIs];
+    const entries: SourceEntry[] = [];
+    for (const s of all) {
+      entries.push({ name: s.name, url: s.url, detail: s.detail });
+    }
+    const merged = mergeSourceEntries([], entries).list;
+    if (merged.length === 0) {
+      toast('还没有点播源可以导出', 'warning');
+      return;
+    }
+    const payload = toLunaConfig(merged);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `LunaTV-config_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`已导出 ${merged.length} 个点播源为 LunaTV 格式（直播源不在该格式内）`, 'success');
+  };
+
   const deleteImpact = (url: string) => {
     const prefix = subKeyPrefix(url);
     return {
@@ -1110,6 +1188,7 @@ function SourceSubscriptions() {
     <section>
       <SectionTitle
         title="数据源订阅 / 分享"
+        hint="填 URL 自动同步；手上只有一段 JSON 就用左侧「导入源」粘贴或选文件"
         extra={
           <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -1121,6 +1200,9 @@ function SourceSubscriptions() {
               }
             >
               导出数据源
+            </button>
+            <button className="btn-ghost btn-sm" onClick={exportLuna} title="导出为 LunaTV-config 的 api_site 格式">
+              Luna 格式
             </button>
             <button
               className="btn-ghost btn-sm"
@@ -1186,7 +1268,7 @@ function SourceSubscriptions() {
       {store.subscriptions.length === 0 ? (
         <p className="text-xs text-faint">
           一份订阅可同时下发点播源与直播源，支持 LibreTV 源列表与 TVBOX 配置（仅导入可直接使用的接口，Spider 类站点自动跳过）；
-          「导出数据源」生成的 JSON 托管到任意 URL 即可分享给他人订阅。
+          「导出数据源」生成的 JSON 托管到任意 URL 即可分享给他人订阅；只有一段贴来的 JSON 时用「导入源」页。
         </p>
       ) : (
         <ul className="space-y-2">

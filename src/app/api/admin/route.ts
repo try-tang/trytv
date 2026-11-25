@@ -236,8 +236,12 @@ export async function POST(req: Request) {
       }
 
       const settings = await updateSettings(patch);
-      const shorts = await replaceShorts(parsed.value.shorts ?? []);
-      const dropped = (parsed.value.shorts ?? []).length - shorts.length;
+      // 只有显式给了 shorts 数组才整体替换：粘贴的往往只是 settings 片段，
+      // 缺这个键就把短剧清空属于「一次手误删掉全部线上内容」。
+      const hasShorts = Array.isArray(parsed.value.shorts);
+      const incomingShorts = parsed.value.shorts ?? [];
+      const shorts = hasShorts ? await replaceShorts(incomingShorts) : listShorts();
+      const dropped = hasShorts ? incomingShorts.length - shorts.length : 0;
       return NextResponse.json({
         ok: true,
         config: toEditableConfig(settings, shorts),

@@ -27,6 +27,15 @@ export interface EditableConfig {
   shorts: ShortEntry[];
 }
 
+/**
+ * 解析出来的配置。与 EditableConfig 的唯一区别是 shorts 可以是 undefined ——
+ * 用户只粘贴了 settings 片段时，不该把线上短剧清单清空。
+ */
+export interface ParsedConfig {
+  settings: SiteSettings;
+  shorts?: ShortEntry[];
+}
+
 /** 把站点设置 + 短剧清单整理成编辑用的对象（口令换占位符） */
 export function toEditableConfig(settings: SiteSettings, shorts: ShortEntry[]): EditableConfig {
   const out = { ...settings } as Record<string, unknown>;
@@ -40,12 +49,12 @@ export function toEditableConfig(settings: SiteSettings, shorts: ShortEntry[]): 
   };
 }
 
-export function stringifyConfig(config: EditableConfig): string {
+export function stringifyConfig(config: EditableConfig | ParsedConfig): string {
   return JSON.stringify(config, null, 2);
 }
 
 export type ParseResult =
-  | { ok: true; value: EditableConfig }
+  | { ok: true; value: ParsedConfig }
   | { ok: false; error: string; line?: number; column?: number };
 
 /**
@@ -113,9 +122,10 @@ export function parseConfig(text: string): ParseResult {
   if (shortsRaw !== undefined && !Array.isArray(shortsRaw)) {
     return { ok: false, error: 'shorts 必须是数组' };
   }
-  const shorts = (shortsRaw as unknown[] | undefined) ?? [];
-  for (let i = 0; i < shorts.length; i++) {
-    const item = shorts[i];
+  // 缺失时保持 undefined，让调用方知道「这次没打算改短剧」，而不是把它当成清空
+  const shorts = shortsRaw as unknown[] | undefined;
+  for (let i = 0; i < (shorts?.length ?? 0); i++) {
+    const item = shorts![i];
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       return { ok: false, error: `shorts[${i}] 必须是对象` };
     }
@@ -135,6 +145,6 @@ export function parseConfig(text: string): ParseResult {
 
   return {
     ok: true,
-    value: { settings: settingsObj as unknown as SiteSettings, shorts: shorts as ShortEntry[] },
+    value: { settings: settingsObj as unknown as SiteSettings, shorts: shorts as ShortEntry[] | undefined },
   };
 }

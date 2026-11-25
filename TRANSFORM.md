@@ -255,3 +255,26 @@ next build          ✓ 33 个路由全部产出（TypeScript + ESLint 通过）
 记录量级是百级、一整包只有几 KB；逐条 diff 需要版本向量或时间戳收敛规则，
 在「手机和电视同时看」这种场景下反而更容易打架。整包覆盖 + 登录时按 `id` 合并（取较新那条）足够用，
 且只有一条路径，不会出现「本地和服务端都觉得自己是对的」。
+
+## 第五轮补充：视频源导入（粘贴 / 文件 / 订阅地址）
+
+用户反馈（原话）：「再修改完善一下视频源导入功能，现在导入很不方便，最好要还能识别TVbox视频源……短剧和私密的视频应该也能导入视频源，和 LunaTV-config 这个里面的应该类似」。
+
+| 文件 | 改动 |
+| --- | --- |
+| `src/lib/source-text-import.ts` | 新增。`parseSourceText()` 统一识别 5 种格式：LibreTV-SourceList / TVBox / LunaTV `api_site` / 单源 / 裸数组；`parseLooseJson()` 容忍注释与尾随逗号；`toLunaConfig()` / `mergeSourceEntries()` 支持导出与去重合并 |
+| `src/app/api/source-import/route.ts` | 新增。`POST {text}` 解析粘贴内容、`GET ?url=` 拉远程配置；两者都走 `guardRequest()`，远程拉取复用 `checkUpstreamAllowed()` 防 SSRF 与 `checkLiveUrlAllowed()` 校验直播地址 |
+| `src/components/source-import-panel.tsx` | 新增。「粘贴 / 文件 / 订阅地址」三页签 + 解析预览 + 逐条勾选（库里已有的默认不勾）；展示格式名、跳过原因、已存在标记 |
+| `src/components/source-manager.tsx` | `SecondaryTab` 加 `'import'`；`SECONDARY_TABS.sources` 插入「导入源」；新增 `SourceImportSection`（把选中项写进 `addCustomApi` / `addLiveSubscription`）；订阅页标题补交叉提示 |
+| `src/lib/admin-config.ts` | `parseConfig()` 的 `shorts` 改为可选（缺失 ≠ 清空），新增 `ParsedConfig` 类型 |
+| `src/app/api/admin/route.ts` | `config.save` 只有显式给了 `shorts` 数组才整体替换，避免「只贴 settings 片段」把线上短剧清空 |
+| `README.md` | 新增「一次导入（粘贴 / 文件 / 订阅地址）」小节与 `/api/source-import` 接口行 |
+
+### 为什么不做「一键全自动识别所有格式并直接入库」
+导入是**破坏性**操作（会往用户的源列表里加东西），而群里转发的配置经常混着几十个 Spider 站点和无
+key 的模板源。自动入库的结果是列表里塞满点不开的源，用户还得手动删。所以流程故意设成
+「解析 → 预览 → 勾选 → 入库」，并在预览里说明每条为什么被跳过（`describeParseStats` 的既有能力）。
+
+### 短剧源怎么进
+短剧清单（`.data/site.json` 的 `shorts` 数组）走的是另一条路：后台「配置」页签的 JSON 编辑器直接编辑，
+或在「私密短剧」页签逐条增改。点播/直播源导入不碰短剧清单，避免一次导入误改私密内容。
