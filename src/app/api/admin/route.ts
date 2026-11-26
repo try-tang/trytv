@@ -17,7 +17,14 @@ import {
   updateShort,
   updateTip,
 } from '@/lib/site-data';
-import { SECRET_PLACEHOLDER, parseConfig, toEditableConfig } from '@/lib/admin-config';
+import {
+  SECRET_PLACEHOLDER,
+  parseConfig,
+  parseSourceConfig,
+  toEditableConfig,
+  toEditableSources,
+} from '@/lib/admin-config';
+import { getPresetSources, presetStats, replacePresetSources } from '@/lib/preset-sources';
 import {
   countUsers,
   createUser,
@@ -35,7 +42,7 @@ export const runtime = 'nodejs';
  *
  * 鉴权只认站长密码（guardAdmin），注册用户即使已登录也进不来。
  *
- * GET  ?res=stats|requests|tips|users|settings|shorts|config|all
+ * GET  ?res=stats|requests|tips|users|settings|shorts|config|sources|all
  * POST { action:
  *   'request.status' | 'request.reply' | 'request.delete'
  * | 'tip.status' | 'tip.delete'
@@ -44,6 +51,7 @@ export const runtime = 'nodejs';
  * | 'shorts.save'            // { enabled?, password? }  口令走 scrypt 哈希，only-hash-落盘
  * | 'shorts.add' | 'shorts.update' | 'shorts.delete'     // 私密短剧清单维护
  * | 'config.save'            // { json } 整段 JSON，仅 settings + shorts 两字段
+ * | 'sources.save'           // { json } sources.json（站点预置数据源），整体替换
  * | 'user.create'            // { username, password, nick? }
  * | 'user.disable' | 'user.enable' | 'user.password' | 'user.delete'
  * }
@@ -77,10 +85,23 @@ export async function GET(req: Request) {
       },
     });
   }
+  if (res === 'sources') {
+    const preset = getPresetSources();
+    return NextResponse.json({
+      ok: true,
+      sources: toEditableSources(preset.sources, preset.liveSources, preset.updatedAt),
+      meta: {
+        file: 'sources.json',
+        editable: ['sources', 'liveSources'],
+        readOnly: [],
+        updatedAt: preset.updatedAt,
+      },
+    });
+  }
 
   return NextResponse.json({
     ok: true,
-    stats: { ...stats(), users: countUsers() },
+    stats: { ...stats(), users: countUsers(), preset: presetStats() },
     requests: listRequests(),
     tips: listAllTips(),
     users: listUsers(),
@@ -247,6 +268,29 @@ export async function POST(req: Request) {
         config: toEditableConfig(settings, shorts),
         // dropped > 0 说明有条目缺 title 或既没 url 又没分集，被静默丢弃了
         stats: { total: shorts.length, dropped },
+      });
+    }
+
+    case 'sources.save': {
+      // 后台「配置 → sources.json」：站点预置数据源，整体替换。
+      // 与 site.json 分开存（.data/sources.json），互不影响；
+      // 校验放宽到「能认出 LunaTV 的 api_site / 裸数组」等常见写法，方便直接粘贴别处的清单。
+      const text = typeof body.json === 'string' ? body.json : '';
+      const parsed = parseSourceConfig(text);
+      if (!parsed.ok) {
+        return NextResponse.json(
+          { error: parsed.error, line: parsed.line, column: parsed.column },
+          { status: 400 }
+        );
+      }
+      const preset = await replacePresetSources({
+        sources: parsed.value.sources,
+        liveSources: parsed.value.liveSources,
+      });
+      return NextResponse.json({
+        ok: true,
+        sources: toEditableSources(preset.sources, preset.liveSources, preset.updatedAt),
+        stats: { vod: preset.sources.length, live: preset.liveSources.length },
       });
     }
 

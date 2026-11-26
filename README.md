@@ -460,13 +460,17 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 | `/api/tip` | POST / GET | 提交赞赏留言；GET 只返回审核通过的 |
 | `/api/notice` | GET | 读取站长通知（含 `version`，前台据此只弹一次） |
 | `/api/shorts` | POST / GET | POST 校验口令下发 7 天签名 cookie；GET 返回短剧清单 |
-| `/api/admin` | GET / POST | 后台：`?res=stats\|requests\|tips\|users\|settings\|all`；POST `action=request.status\|request.reply\|request.delete\|tip.status\|tip.delete\|notice.save\|settings.save\|user.create\|user.disable\|user.enable\|user.password\|user.delete` |
+| `/api/admin` | GET / POST | 后台：`?res=stats\|requests\|tips\|users\|settings\|shorts\|config\|sources\|all`；POST `action=request.*\|tip.*\|notice.save\|settings.save\|user.*\|shorts.*\|config.save\|sources.save` |
 | `/api/user` | GET / POST / DELETE | 注册用户：GET 当前身份与站点策略；POST `action=login\|register`；DELETE 退出 |
 | `/api/access` | GET | 访问策略与当前身份（middleware 读取，`no-store`） |
 | `/api/library` | GET / POST | 观影记录与待看清单云同步：GET 读当前账号的记录（没存过返回 `null`），POST 整包覆盖 |
 | `/api/source-import` | GET / POST | 视频源解析：POST `{text}` 解析粘贴/文件内容，GET `?url=` 拉取远程配置；都只回预览清单，不落库（入库由前端调用 store 完成） |
 
 ## 站长后台
+
+> 后台是**整页大编辑器**布局：左边一列段落索引（求片 / 留言 / 通知 / 短剧 / 配置 / 站点设置 / 账号，带计数徽章），
+> 右边一整块工作区，底部常驻状态栏显示当前段落、待处理计数、同步状态与数据目录。
+> 段落会记在 `localStorage`，也支持 `/admin#users` 这样的 hash 直接打开。
 
 访问 `/admin`，用 `PASSWORD` 登录后可以：
 
@@ -475,7 +479,7 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 - **通知**：写一条公告并开启，前台按 `version` 只弹一次（改动正文会自增版本号）
 - **站点设置**：访问模式（所有人可看 / 需登录 / 仅会员可看）、是否开放注册、站名、口号、顶部提示条
 - **用户管理**：手动建号、停用 / 启用、重置密码、删除
-- **配置**：内置 JSON 编辑器，直接改 `settings` 与 `shorts` 两个字段（见下一节）
+- **配置**：内置 JSON 编辑器，可切 `site.json`（settings / shorts）与 `sources.json`（站点预置数据源）两份文件（见下一节）
 
 ### 账号与观影记录同步
 
@@ -529,6 +533,35 @@ Caddy 一行搞定：`tv.example.com { reverse_proxy 127.0.0.1:8080 }`
 - 显示：自动换行 / 缩略图 / 行号 / 字号
 - 主区三个页签：编辑器、树状视图（全部展开 / 收起）、预览；底部状态栏显示行列、选中字符数、UTF-8、校验状态、最后保存时间
 - 快捷键：`Ctrl/Cmd+S` 保存、`Ctrl/Cmd+O` 重新载入；保存失败会把光标跳到出错的那一行
+
+#### 两个文件，一块编辑器
+
+左栏「文件」那一组可以切换两份配置，各有独立的未保存标记与校验状态：
+
+| 文件 | 对应接口 | 存哪 | 能改什么 |
+| --- | --- | --- | --- |
+| `site.json` | `GET /api/admin?res=config` → `config.save` | `.data/site.json` | `settings`（站名 / 口号 / 访问模式 / 过滤开关 / 短剧口令）、`shorts`（短剧清单） |
+| `sources.json` | `GET /api/admin?res=sources` → `sources.save` | `.data/sources.json` | `sources`（**站点预置**点播源）、`liveSources`（预置直播源） |
+
+`sources.json` 的形态：
+
+```json
+{
+  "name": "站点预置数据源",
+  "version": 1,
+  "sources": [
+    { "name": "某站", "url": "https://a.example.com/api.php/provide/vod", "detail": "https://a.example.com", "isAdult": false }
+  ],
+  "liveSources": [
+    { "name": "直播1", "url": "https://iptv.example.com/a.m3u", "epg": "https://epg.example.com/e.xml" }
+  ]
+}
+```
+
+- 也可以直接贴 **LunaTV-config 的 `api_site`**（`{"api_site":{"https://…":{"name":…,"api":…,"detail":…}}}`）或**裸数组**，保存时自动归一成上面的形态。
+- 上限：点播源 200 个、直播源 100 个；`url` 必须是 `http(s)://` 开头；按去掉尾斜杠后的地址去重。
+- **预置源 ≠ 浏览器里的自定义源**：预置源存在服务端，所有访客（以及新设备）打开就有一份；访客自己在设置里加的源只存在他自己的浏览器。两边互不影响，同名也不会互相覆盖。
+
 
 > Monaco 是**自托管**的：`public/monaco/vs` 里放了裁剪过的运行子集（约 4.6 MB），
 > 后台不会去连 `cdn.jsdelivr.net`，内网 / 离线部署也能用。

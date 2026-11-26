@@ -278,3 +278,24 @@ key 的模板源。自动入库的结果是列表里塞满点不开的源，用�
 ### 短剧源怎么进
 短剧清单（`.data/site.json` 的 `shorts` 数组）走的是另一条路：后台「配置」页签的 JSON 编辑器直接编辑，
 或在「私密短剧」页签逐条增改。点播/直播源导入不碰短剧清单，避免一次导入误改私密内容。
+
+## 第六轮补充：后台改成「整页大编辑器」（参考 hafrey1/LunaTV-config 的 web-editor）
+
+| 文件 | 变化 |
+| --- | --- |
+| `src/app/admin/page.tsx` | 重写成整页布局：左栏段落索引（带计数徽章）+ 右栏工作区 + 底部常驻状态栏；段落存 `localStorage` 并同步 URL hash（`/admin#users` 可直接打开） |
+| `src/components/admin-panels.tsx`（新） | 从原 `page.tsx` 拆出的业务面板：`RequestsTable` / `TipsTable` / `NoticeEditor` / `SettingsPanel` / `ShortsPanel` / `UsersPanel`，导出 `AdminAct` 与 `ADMIN_SECTIONS` |
+| `src/components/admin-types.ts`（新） | 后台共用类型：`SettingsInfo` / `ShortInfo` / `AccountInfo` / `Stats`（含 `preset`） |
+| `src/components/admin-config-panel.tsx` | 「配置」页升级成**多文件**编辑器：`site.json` 与 `sources.json` 各自独立的文本、脏标记、校验状态与撤销栈；左栏「文件」组切换，保存按文件路由到 `config.save` / `sources.save` |
+| `src/lib/admin-config.ts` | 新增 `EditableSourceConfig` / `ParsedSourceConfig` / `toEditableSources()` / `parseSourceConfig()`；`parseSourceConfig` 认三种写法：本文件 `{sources,liveSources}`、LunaTV 的 `{api_site}`、裸数组 |
+| `src/lib/preset-sources.ts`（新） | `.data/sources.json` 读写层：`getPresetSources` / `replacePresetSources`（tmp + rename 原子落盘）/ `presetStats` |
+| `src/app/api/admin/route.ts` | 新增 `res=sources` 与 `sources.save`；`res=all` 的 `stats` 多一个 `preset:{vod,live,updatedAt}` |
+| `src/components/icon.tsx` | 补 `list` / `heart` / `info` 三个图标 |
+
+**为什么预置源放服务端文件**：浏览器里的自定义源只存在访客自己那份 `localStorage`，换设备就没了，也没法给所有访客统一发一份。
+`.data/sources.json` 这份服务端文件是「站点出厂配置」，和 `site.json` 一样进命名卷、一起备份。
+
+**为什么没有接 GitHub Token**：LunaTV-config 的编辑器是直接改它自己仓库里的 JSON；这边配置落在容器数据卷，
+再套一层「浏览器拿 PAT 去写仓库」只会多一个泄露面，所以只学它的界面形态（左栏工具面板 + 底部状态栏 + 多文件）。
+
+**权限边界没变**：`/api/admin` 仍然只认站长 `PASSWORD` 会话，`sources.save` 同样走 `guardAdmin`。
