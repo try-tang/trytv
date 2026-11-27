@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isPasswordConfigured, isUsingDefaultPassword, sessionFromCookieHeader } from '@/lib/auth';
 import { getSettings } from '@/lib/site-data';
-import { currentUserFromRequest } from '@/lib/users';
+import { currentUserFromRequest, countUsers } from '@/lib/users';
 import { getEnvSources } from '@/lib/env-sources';
 import { getEnvLiveSources } from '@/lib/env-live-sources';
 import { getEnvSubscriptions } from '@/lib/env-subscriptions';
@@ -38,6 +38,12 @@ export async function GET(req: Request) {
     allowRegister: settings.allowRegister,
     userLoggedIn: Boolean(cur),
     userNick: cur ? cur.user.nick || cur.user.username : null,
+    /**
+     * 站点里已经有多少个注册账号。
+     * 登录页据此决定默认落在「账号登录」还是「站长密码」——
+     * 一个注册用户都没有的单人部署，「账号登录」页签永远填不出有效值。
+     */
+    userCount: countUsers().total,
     // —— 站点文案（后台可改，null 时前端用 SITE 默认值）——
     siteName: settings.siteName || null,
     slogan: settings.slogan || null,

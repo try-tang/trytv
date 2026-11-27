@@ -14,6 +14,10 @@ import { cn } from '@/lib/utils';
  *
  * 管理员登录用的是站长密码（/api/auth），与 /login 页、访问验证、/admin 共用同一套
  * httpOnly cookie，所以在这儿登录后，设置抽屉和后台都直接认。
+ *
+ * 关于骨架：登录态要等 /api/status 与 /api/user 两个请求回来才知道，
+ * 之前未就绪时直接渲染「未登录 / 游客」+ 不给按钮，用户看到的是一张空卡、
+ * 找不到「管理员登录」入口。现在未就绪时渲染占位骨架，按钮永远在（未就绪时禁用）。
  */
 export function MineAccountCard() {
   const { ready, user, admin, accessMode, allowRegister, logoutUser } = useAccess();
@@ -36,6 +40,29 @@ export function MineAccountCard() {
     toast('已退出登录', 'info');
     window.location.reload();
   };
+
+  // 未就绪：骨架占位，按钮仍是可见的（禁用），避免「卡里啥都没有」的错觉
+  if (!ready) {
+    return (
+      <div className="rounded-xl border border-line bg-card px-3.5 py-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-chip shrink-0 animate-pulse" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="h-3 w-24 rounded bg-chip animate-pulse" />
+            <div className="h-2.5 w-40 rounded bg-chip/70 animate-pulse" />
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="btn-primary btn-sm rounded-full px-3 opacity-40 pointer-events-none">
+              登录
+            </span>
+            <span className="btn-ghost btn-sm rounded-full px-3 opacity-40 pointer-events-none">
+              管理员登录
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-line bg-card px-3.5 py-3">
@@ -68,7 +95,7 @@ export function MineAccountCard() {
           </div>
         </div>
 
-        {ready && !logged && (
+        {!logged && (
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
@@ -87,7 +114,7 @@ export function MineAccountCard() {
           </div>
         )}
 
-        {ready && logged && (
+        {logged && (
           <div className="flex items-center gap-1.5 shrink-0">
             {admin && (
               <Link href="/admin" className="btn-ghost btn-sm rounded-full px-3">
@@ -105,7 +132,7 @@ export function MineAccountCard() {
         )}
       </div>
 
-      {ready && !logged && accessMode !== 'open' && (
+      {!logged && accessMode !== 'open' && (
         <p className="mt-2 pt-2 border-t border-line text-[11px] text-faint">
           {allowRegister
             ? '开放注册中，填个用户名和密码就能用。'
@@ -123,6 +150,9 @@ export function MineAccountCard() {
         defaultMode={gateMode}
         // 「我的 → 管理员登录」的期待就是「输完密码直接进后台」
         adminRedirect={gateMode === 'admin' ? '/admin' : undefined}
+        onSuccess={() => {
+          toast(gateMode === 'admin' ? '站长已登录，正在进入后台…' : '登录成功', 'success');
+        }}
         reason={
           gateMode === 'admin'
             ? '请输入站长密码（部署时设的 PASSWORD，没设置过则默认 admin）。它和访客账号不是一回事，用来进后台。'

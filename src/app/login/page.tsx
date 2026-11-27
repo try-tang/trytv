@@ -50,6 +50,32 @@ export default function LoginPage() {
     else if (tab === 'register') setMode('register');
   }, []);
 
+  /**
+   * 站点没有任何注册用户、且当前没有人登录时，默认落在「站长登录」页签。
+   *
+   * 理由：单人自部署是最常见的形态，这种情况下「账号登录」页签永远填不出东西，
+   * 用户点了却进不去后台，会以为登录坏了。只有明确存在注册用户时才默认账号登录。
+   */
+  useEffect(() => {
+    if (!ready) return;
+    if (readParam('tab')) return;
+    if (admin || user) return;
+    if (accessMode !== 'open') return;
+    let alive = true;
+    fetch('/api/status', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { userCount?: number } | null) => {
+        if (!alive || !d) return;
+        if (!d.userCount) setMode('admin');
+      })
+      .catch(() => {
+        /* 读不到就保持默认，不打扰 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [ready, admin, user, accessMode]);
+
   // 已是登录态（或整站不需要登录）就直接回目标页
   useEffect(() => {
     if (!ready) return;
@@ -114,7 +140,7 @@ export default function LoginPage() {
         </div>
 
         <div className="rounded-xl border border-line bg-card p-4">
-          <div className="flex gap-1.5 mb-4">
+          <div className="flex gap-1.5 mb-1.5">
             {tabs
               .filter((t) => t.show)
               .map((t) => (
@@ -136,6 +162,13 @@ export default function LoginPage() {
                 </button>
               ))}
           </div>
+          <p className="mb-3 text-[11px] leading-relaxed text-faint">
+            {mode === 'admin'
+              ? '站长密码 = 部署时设的 PASSWORD（没设过默认 admin），进后台就用它。'
+              : mode === 'register'
+                ? '注册一个本站账号，用来看内容和跨设备同步观看记录。'
+                : '本站账号登录。如果你是站长本人，切到「站长密码」。'}
+          </p>
 
           <form onSubmit={submit} className="space-y-2.5">
             {mode === 'admin' ? (

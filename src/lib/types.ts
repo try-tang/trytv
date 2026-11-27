@@ -151,6 +151,8 @@ export interface AuthStatusResponse {
   userLoggedIn?: boolean;
   /** 当前登录用户的昵称 */
   userNick?: string | null;
+  /** 站点里已有的注册账号总数（登录页用来自动选默认页签；缺省按 0 处理） */
+  userCount?: number;
   /** 后台覆盖的站名 / 口号 / 顶部提示条（null 表示用代码默认值） */
   siteName?: string | null;
   slogan?: string | null;

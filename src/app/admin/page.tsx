@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
 import { SiteFooter } from '@/components/site-footer';
 import { Icon } from '@/components/icon';
@@ -419,13 +420,14 @@ const ACCESS_LABEL: Record<'open' | 'login' | 'members', string> = {
 function AdminGate({ onSuccess }: { onSuccess: () => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const router = useRouter();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !password) return;
     setBusy(true);
     setError('');
     try {
@@ -436,9 +438,12 @@ function AdminGate({ onSuccess }: { onSuccess: () => void }) {
       });
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) throw new Error(data?.error || '站长密码不正确');
+      // 三件事缺一不可：缓存失效（useAuth 的 verified 重新拉）、
+      // 组件内的数据重新加载、服务端组件树刷新（middleware 已经放行了）
       await queryClient.invalidateQueries({ queryKey: STATUS_QUERY_KEY });
       toast('站长已登录', 'success');
       onSuccess();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败');
     } finally {
