@@ -115,9 +115,6 @@ export function ServiceSheet() {
         defaultMode="admin"
         adminRedirect="/admin"
         reason="站长密码是部署时设置的 PASSWORD（没设置时默认 admin），与前台访客账号不是一回事"
-        onSuccess={() => {
-          toast('站长已登录，可以进后台了', 'success');
-        }}
       />
       <NoticeModal
         open={sheet === 'notice' || noticePopup.open}

@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useFocusTrap } from './use-focus-trap';
 import { useAccess } from './access';
-import { useToast } from './toast';
 import { Icon } from './icon';
 import { cn } from '@/lib/utils';
 
@@ -49,9 +47,7 @@ export function AccessGateModal({
    */
   adminRedirect?: string;
 }) {
-  const { accessMode, allowRegister, admin, user, loginUser, registerUser, refresh } = useAccess();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { accessMode, allowRegister, admin, user, loginUser, registerUser, loginAdmin } = useAccess();
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(open, panelRef);
 
@@ -63,17 +59,22 @@ export function AccessGateModal({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // 每次打开都重置表单：上次的错误提示/密码不该带进新一次
+  // 每次打开都重置表单，但**不改页签**：
+  // 站长登录入口（我的页「管理员登录」、/login?tab=admin、后台 AdminGate）
+  // 必须落在「站长」页签上；被 allowRegister 之类的条件改回「登录」就等于把人挡住了。
   useEffect(() => {
     if (!open) return;
-    setMode(allowRegister ? defaultMode : 'user');
+    setMode(defaultMode);
     setError('');
     setPassword('');
-    setAdminPwd('');
-  }, [open, allowRegister, defaultMode]);
+  }, [open, defaultMode]);
 
   if (!open) return null;
 
+  /**
+   * 「注册」页签只在站点确实允许注册、且访问模式需要账号时才出现。
+   * 站长页签永远在——后台只认站长密码，跟注册开关无关。
+   */
   const canRegister = allowRegister && accessMode !== 'open';
 
   const submit = async (e: React.FormEvent) => {
@@ -84,15 +85,8 @@ export function AccessGateModal({
     try {
       if (mode === 'admin') {
         if (!adminPwd) throw new Error('请输入站长密码');
-        const res = await fetch('/api/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: adminPwd }),
-        });
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        if (!res.ok) throw new Error(data?.error || '站长密码不正确');
-        await queryClient.invalidateQueries();
-        toast('站长已登录', 'success');
+        // 走 AccessProvider 的统一入口：它会把 admin 置 true 并广播给顶栏 / 我的页 / 后台
+        await loginAdmin(adminPwd);
       } else if (mode === 'register') {
         if (!username.trim() || !password) throw new Error('请填写用户名和密码');
         await registerUser(username.trim(), password, nick.trim() || undefined);
@@ -100,12 +94,12 @@ export function AccessGateModal({
         if (!username.trim() || !password) throw new Error('请填写用户名和密码');
         await loginUser(username.trim(), password);
       }
-      await refresh();
       onSuccess?.();
       onClose();
-      // 站长登录后直接进后台（「我的 → 管理员登录」这条路径期待的就是这个）
+      // 站长登录后直接进后台（「我的 → 管理员登录」这条路径期待的就是这个）。
+      // 用 replace 而不是 href：后台不该留在浏览器的「返回上一页」栈里。
       if (mode === 'admin' && adminRedirect) {
-        window.location.href = adminRedirect;
+        window.location.replace(adminRedirect);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败，请重试');

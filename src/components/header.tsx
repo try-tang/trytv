@@ -62,6 +62,17 @@ export function Header({
    * 这里只做前端「体验级」拦截：数据本身按账号存在浏览器里，
    * 真正的数据隔离由登录态决定，拦的不是权限而是「没登录时改了也没处存」。
    */
+  /**
+   * 右上角要不要露「登录」按钮。
+   *
+   * - open 模式（所有人可看）：不露。纯观看站点不该上来就让人注册，
+   *   需要账号的访客从「我的」页或 /login 自己登。
+   * - login / members 模式：必须露，否则访客不知道该怎么进来。
+   * 已登录的人永远看到齿轮（设置），与这条互斥。
+   */
+  const needsLogin =
+    access.ready && !access.user && !access.admin && access.accessMode !== 'open';
+
   const openSettings = () => {
     if (!access.ready) return;
     if (access.user || access.admin) {
@@ -158,10 +169,11 @@ export function Header({
             <IconButton label="下载管理" onClick={requestShowDownloadManager}>
               <Icon name="download" />
             </IconButton>
-            {/* 未登录时这里就是「登录」两个字的按钮（对应原站「右上角点开先登录」），
-                已登录才回到齿轮（此时点开是设置抽屉：源、订阅、封面、站点与账号）。
-                后台入口不在这里——它在设置抽屉的「站点与账号」和「我的」页账号卡里。 */}
-            {access.ready && !access.user && !access.admin ? (
+            {/* 右上角只在**需要登录才能看**的时候才出现「登录」按钮：
+                open 模式（所有人可看）下整站不给登录入口，避免把一个纯播放站点
+                弄成「先注册」的观感；此时要登录/进后台走「我的」页。
+                已登录（注册用户或站长）→ 齿轮，点开是设置抽屉。 */}
+            {needsLogin ? (
               <button
                 type="button"
                 onClick={openSettings}
@@ -178,8 +190,8 @@ export function Header({
 
           {/* 手机：设置直接露出（最常用），其余收进汉堡菜单 */}
           <div className="sm:hidden flex items-center gap-1 shrink-0">
-            {/* 与菜单项一致：打开抽屉前先收起菜单，否则关掉设置后汉堡菜单还摊在那儿 */}
-            {access.ready && !access.user && !access.admin ? (
+            {/* 与桌面一致：open 模式不露登录按钮，只留齿轮（设置） */}
+            {needsLogin ? (
               <button
                 type="button"
                 onClick={() => {

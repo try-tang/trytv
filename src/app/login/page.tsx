@@ -31,7 +31,8 @@ function readParam(name: string): string | null {
 export default function LoginPage() {
   const router = useRouter();
   const [next, setNext] = useState('/');
-  const { accessMode, allowRegister, user, admin, loginUser, registerUser, ready } = useAccess();
+  const { accessMode, allowRegister, user, admin, loginUser, registerUser, loginAdmin, ready } =
+    useAccess();
 
   // ?tab=admin 直接落在站长页签（后台「需要先登录」按钮带过来）
   const [mode, setMode] = useState<Mode>('login');
@@ -90,13 +91,8 @@ export default function LoginPage() {
       setBusy(true);
       try {
         if (mode === 'admin') {
-          const res = await fetch('/api/auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: adminPwd }),
-          });
-          const data = (await res.json().catch(() => null)) as { error?: string } | null;
-          if (!res.ok) throw new Error(data?.error || '密码错误');
+          // 走统一入口：写上下文 + 广播（弹窗、顶栏、我的页、后台同时认这次登录）
+          await loginAdmin(adminPwd);
           router.replace(next);
           router.refresh();
           return;
@@ -113,7 +109,7 @@ export default function LoginPage() {
         setBusy(false);
       }
     },
-    [busy, mode, adminPwd, username, password, nick, next, router, registerUser, loginUser]
+    [busy, mode, adminPwd, username, password, nick, next, router, registerUser, loginUser, loginAdmin]
   );
 
   const tabs: { key: Mode; label: string; show: boolean }[] = [

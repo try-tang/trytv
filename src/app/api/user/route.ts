@@ -10,7 +10,7 @@ import {
   currentUserFromRequest,
 } from '@/lib/users';
 import { getSettings } from '@/lib/site-data';
-import { checkRateLimit, clearRateLimit } from '@/lib/auth';
+import { checkRateLimit, clearRateLimit, sessionFromCookieHeader } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 
@@ -60,10 +60,20 @@ function attachSession(
 export async function GET(req: Request) {
   const settings = getSettings();
   const cur = currentUserFromRequest(req);
+  /**
+   * 站长态必须在这里一起下发。
+   *
+   * AccessProvider 的 refresh() 打的就是这个接口，之前它拿不到站长登录态，
+   * 于是「站长登录成功」只活在弹窗的 toast 里：顶栏还显示「登录」、
+   * 设置抽屉还要再登一次、/admin 的 AdminGate 又弹一遍密码。
+   * 站长 cookie 是 ltv_session，这里用同一套签名校验判定。
+   */
+  const adminLoggedIn = Boolean(sessionFromCookieHeader(req.headers.get('cookie')));
   return NextResponse.json({
     ok: true,
     loggedIn: Boolean(cur),
     user: cur ? toPublic(cur.user) : null,
+    adminLoggedIn,
     accessMode: settings.accessMode,
     allowRegister: settings.allowRegister,
     siteName: settings.siteName || null,

@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/header';
@@ -9,6 +8,7 @@ import { SiteFooter } from '@/components/site-footer';
 import { Icon } from '@/components/icon';
 import { useToast } from '@/components/toast';
 import { useAuth } from '@/components/auth';
+import { useAccess } from '@/components/access';
 import { ConfigPanel } from '@/components/admin-config-panel';
 import {
   NoticeEditor,
@@ -19,7 +19,6 @@ import {
   UsersPanel,
 } from '@/components/admin-panels';
 import type { AccountInfo, SettingsInfo, ShortInfo, Stats } from '@/components/admin-types';
-import { STATUS_QUERY_KEY } from '@/lib/client-api';
 import { noticeApi, type RequestEntry, type TipEntry, type NoticeInfo } from '@/lib/site-client';
 import { cn } from '@/lib/utils';
 
@@ -418,30 +417,24 @@ const ACCESS_LABEL: Record<'open' | 'login' | 'members', string> = {
  * 这里覆盖的是「会话过期 / 直接访问但客户端还没同步」的情况。
  */
 function AdminGate({ onSuccess }: { onSuccess: () => void }) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const access = useAccess();
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  /**
+   * 走 AccessProvider 的 loginAdmin：它是全站唯一写「站长已登录」的地方，
+   * 会同时更新上下文、让 /api/status 缓存失效并广播给顶栏与我的页。
+   * 这里只负责把后台数据重新拉一遍 + refresh 服务端组件树。
+   */
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy || !password) return;
     setBusy(true);
     setError('');
     try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (!res.ok) throw new Error(data?.error || '站长密码不正确');
-      // 三件事缺一不可：缓存失效（useAuth 的 verified 重新拉）、
-      // 组件内的数据重新加载、服务端组件树刷新（middleware 已经放行了）
-      await queryClient.invalidateQueries({ queryKey: STATUS_QUERY_KEY });
-      toast('站长已登录', 'success');
+      await access.loginAdmin(password);
       onSuccess();
       router.refresh();
     } catch (err) {
